@@ -65,7 +65,7 @@ main {
   box-shadow: 0 4px 14px rgba(0,0,0,0.3);
 }
 
-canvas {
+.stage canvas {
   width: 100%;
   height: auto;
   max-width: 720px;
