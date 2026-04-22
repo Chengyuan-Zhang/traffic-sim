@@ -505,11 +505,10 @@
     cx.fill();
   }
 
-  // Smoothed auto-scale for FD axes. Base the scale on the 98th percentile of
-  // points within a recent window so a handful of outliers don't dominate,
-  // round up to a "nice" number, and ease toward the target so the axis
-  // doesn't flicker every frame.
-  const fdAxes = { maxK: 80, maxQ: 1200 };
+  // Auto-scale FD axes to fit ALL points currently in the buffer, with a
+  // small headroom and rounded to a "nice" tick. Grows instantly so outliers
+  // remain visible; shrinks gently so the axis doesn't jitter.
+  const fdAxes = { maxK: 40, maxQ: 600 };
   function niceCeil(v) {
     if (!isFinite(v) || v <= 0) return 1;
     const p = Math.pow(10, Math.floor(Math.log10(v)));
@@ -522,19 +521,15 @@
     else niced = 10;
     return niced * p;
   }
-  function percentile(arr, p) {
-    if (arr.length === 0) return 0;
-    const a = arr.slice().sort((x, y) => x - y);
-    const i = Math.min(a.length - 1, Math.floor(p * a.length));
-    return a[i];
-  }
   function updateFDAxes() {
-    const recent = chartData.fd.slice(-800);
-    const targetK = Math.max(40, niceCeil(percentile(recent.map(p => p.k), 0.98) * 1.15));
-    const targetQ = Math.max(600, niceCeil(percentile(recent.map(p => p.q), 0.98) * 1.15));
-    const ease = (cur, tgt) => (tgt > cur * 1.2 ? tgt : cur + 0.08 * (tgt - cur));
-    fdAxes.maxK = ease(fdAxes.maxK, targetK);
-    fdAxes.maxQ = ease(fdAxes.maxQ, targetQ);
+    const pts = chartData.fd;
+    let mk = 0, mq = 0;
+    for (const p of pts) { if (p.k > mk) mk = p.k; if (p.q > mq) mq = p.q; }
+    const targetK = Math.max(40, niceCeil(mk * 1.1));
+    const targetQ = Math.max(600, niceCeil(mq * 1.1));
+    // Grow instantly to show new extremes; shrink gently to avoid flicker.
+    fdAxes.maxK = targetK > fdAxes.maxK ? targetK : fdAxes.maxK + 0.05 * (targetK - fdAxes.maxK);
+    fdAxes.maxQ = targetQ > fdAxes.maxQ ? targetQ : fdAxes.maxQ + 0.05 * (targetQ - fdAxes.maxQ);
   }
 
   function drawFD() {
