@@ -747,14 +747,14 @@
   const arRow = document.getElementById("arRow");
   const modeCite = document.getElementById("modeCite");
   const CITE = {
-    gp: 'Gaussian-process noise with a stationary kernel, from '
+    gp: 'Gaussian-process driver noise with a stationary kernel, from '
       + '<a href="https://arxiv.org/abs/2210.03571" target="_blank" rel="noopener">Zhang &amp; Sun (2024) — MA-IDM</a>. '
       + 'Realized here via M = 32 random Fourier features per car.',
     ar: 'AR(p) noise with posterior-mean coefficients ρ from Table 1 of '
-      + '<a href="https://arxiv.org/abs/2307.03340" target="_blank" rel="noopener">Zhang, Chen &amp; Sun (2024) — dynamic-regression IDM</a>, '
+      + '<a href="https://arxiv.org/abs/2307.03340" target="_blank" rel="noopener">Zhang, Wang &amp; Sun (2024) — dynamic-regression IDM</a>, '
       + 'calibrated on HighD at 5 fps. σ here is the innovation std σ<sub>η</sub>.',
     white: 'I.i.d. Gaussian driver noise — the Bayesian IDM (B-IDM) baseline '
-      + 'used for comparison in both Zhang &amp; Sun (2024) and Zhang, Chen &amp; Sun (2024).',
+      + 'used for comparison in both Zhang &amp; Sun (2024) and Zhang, Wang &amp; Sun (2024).',
   };
   function applyNoiseMode() {
     params.noiseMode = noiseModeEl.value;
