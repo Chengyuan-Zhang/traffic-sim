@@ -252,6 +252,17 @@ footer a { color: var(--accent); }
   border-radius: 4px;
 }
 
+.fd-axes {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 10px;
+  align-items: center;
+  margin-top: 8px;
+  font-size: 0.78rem;
+  color: rgba(230,237,243,0.65);
+}
+.fd-axes input[type="range"] { width: 100%; }
+
 .stage canvas#road { cursor: crosshair; }
 
 .tribute-small {

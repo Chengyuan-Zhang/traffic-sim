@@ -6,13 +6,13 @@
 
   const params = {
     numCars: 30,
-    // Defaults from Table 1 of arXiv:2307.03340 (B-IDM posterior means, HighD)
-    // and MA-IDM kernel params from arXiv:2210.03571.
-    v0: 21,        // desired speed (m/s)   [paper: 21.090]
-    T: 0.9,        // safe time headway (s) [paper: 0.946]
-    a: 0.5,        // max acceleration      [paper: 0.518]
-    b: 1.5,        // comfortable decel     [paper: 1.542]
-    s0: 3.7,       // minimum jam spacing   [paper: 3.724]
+    // IDM defaults from Treiber & Kesting (2013), Traffic Flow Dynamics,
+    // Table 11.1 — recommended highway-traffic values.
+    v0: 33,        // desired speed (m/s)   [~120 km/h]
+    T: 1.5,        // safe time headway (s)
+    a: 1.2,        // max acceleration (m/s^2)
+    b: 1.5,        // comfortable deceleration (m/s^2)
+    s0: 2.0,       // minimum jam spacing (m)
     delta: 4,      // IDM exponent
     carLength: 4.5,
     radius: 120,   // meters
@@ -28,6 +28,10 @@
     // Measuring region on the ring (in degrees; 0 = top, clockwise).
     regionCenter: 0,
     regionSpan: 90,
+
+    // Fundamental-diagram axis maxes (user-adjustable)
+    fdMaxK: 200,   // density axis max (veh/km)
+    fdMaxQ: 3000,  // flow axis max (veh/hr)
   };
 
   // AR coefficients calibrated on HighD (5 fps) in arXiv:2307.03340, Table 1.
@@ -508,8 +512,8 @@
   function drawFD() {
     const w = cFD.width, h = cFD.height;
     // dynamic y-scale from current data, plus theoretical max guidance
-    const maxK = Math.max(80, ...chartData.fd.map(p => p.k)) * 1.1;
-    const maxQ = Math.max(1200, ...chartData.fd.map(p => p.q)) * 1.1;
+    const maxK = params.fdMaxK;
+    const maxQ = params.fdMaxQ;
     drawAxes(xFD, w, h, maxQ);
 
     const x0 = 30, plotW = w - x0 - 6;
@@ -718,6 +722,8 @@
   bindRange("dtStep", "dtStep", (v) => v.toFixed(2));
   bindRange("regionCenter", "regionCenter", (v) => String(v | 0) + "°");
   bindRange("regionSpan", "regionSpan", (v) => String(v | 0) + "°");
+  bindRange("fdMaxK", "fdMaxK", (v) => String(v | 0));
+  bindRange("fdMaxQ", "fdMaxQ", (v) => String(v | 0));
   bindRange("gpSigma", "gpSigma", (v) => v.toFixed(2));
   bindRange("gpEll", "gpEll", (v) => v.toFixed(1));
 
