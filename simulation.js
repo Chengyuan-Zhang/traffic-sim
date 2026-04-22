@@ -263,7 +263,7 @@
       const arr = chartData[k];
       if (arr.length > MAX_POINTS) arr.splice(0, arr.length - MAX_POINTS);
     }
-    if (chartData.fd.length > 400) chartData.fd.splice(0, chartData.fd.length - 400);
+    // FD scatters are kept indefinitely (reset only via the Reset button)
   }
 
   const cSpeed = document.getElementById("chartSpeed");
@@ -356,8 +356,7 @@
       const p = chartData.fd[i];
       const x = x0 + (p.k / maxK) * plotW;
       const y = h - (p.q / maxQ) * h;
-      const alpha = 0.15 + 0.85 * (i / n);
-      xFD.fillStyle = `rgba(79,195,247,${alpha.toFixed(2)})`;
+      xFD.fillStyle = "rgba(79,195,247,0.85)";
       xFD.beginPath();
       xFD.arc(x, y, 2.2, 0, Math.PI * 2);
       xFD.fill();
@@ -393,50 +392,50 @@
     xFD.restore();
   }
 
-  // Space–time diagram: maintain an offscreen ImageBitmap-like buffer
+  // Time–space diagram: x = time (older → newer), y = position on the ring
   const stBuf = document.createElement("canvas");
-  stBuf.width = 400;   // columns = position bins
-  stBuf.height = 300;  // rows = time samples (most recent at bottom)
-  const xSTBuf = stBuf.getContext("2d");
+  stBuf.width = 600;   // columns = time samples (newest at right)
+  stBuf.height = 240;  // rows = position bins
+  const xSTBuf = stBuf.getContext("2d", { willReadFrequently: true });
   xSTBuf.fillStyle = "#0e1620";
   xSTBuf.fillRect(0, 0, stBuf.width, stBuf.height);
 
   function pushSTRow() {
     if (!cars.length) return;
     const L = circumference();
-    const cols = stBuf.width;
-    const binSum = new Float32Array(cols);
-    const binCnt = new Uint16Array(cols);
+    const rows = stBuf.height;
+    const binSum = new Float32Array(rows);
+    const binCnt = new Uint16Array(rows);
     for (const c of cars) {
-      const idx = Math.min(cols - 1, Math.floor((c.s / L) * cols));
+      const idx = Math.min(rows - 1, Math.floor((c.s / L) * rows));
       binSum[idx] += c.v;
       binCnt[idx]++;
     }
-    // scroll up by 1 row
-    const img = xSTBuf.getImageData(0, 1, stBuf.width, stBuf.height - 1);
+    // scroll left by 1 column
+    const img = xSTBuf.getImageData(1, 0, stBuf.width - 1, stBuf.height);
     xSTBuf.putImageData(img, 0, 0);
-    // build the new bottom row, carrying forward from the just-scrolled row above where empty
-    const y = stBuf.height - 1;
-    const aboveRow = xSTBuf.getImageData(0, y - 1, cols, 1).data;
-    const rowImg = xSTBuf.createImageData(cols, 1);
-    for (let i = 0; i < cols; i++) {
+    // build the new rightmost column; fill empty bins from the column to the left
+    const x = stBuf.width - 1;
+    const leftCol = xSTBuf.getImageData(x - 1, 0, 1, rows).data;
+    const colImg = xSTBuf.createImageData(1, rows);
+    for (let i = 0; i < rows; i++) {
       if (binCnt[i] === 0) {
-        rowImg.data[i * 4]     = aboveRow[i * 4];
-        rowImg.data[i * 4 + 1] = aboveRow[i * 4 + 1];
-        rowImg.data[i * 4 + 2] = aboveRow[i * 4 + 2];
-        rowImg.data[i * 4 + 3] = 255;
+        colImg.data[i * 4]     = leftCol[i * 4];
+        colImg.data[i * 4 + 1] = leftCol[i * 4 + 1];
+        colImg.data[i * 4 + 2] = leftCol[i * 4 + 2];
+        colImg.data[i * 4 + 3] = 255;
         continue;
       }
       const v = binSum[i] / binCnt[i];
       const ratio = Math.max(0, Math.min(1, v / params.v0));
       const hue = Math.round(ratio * 120);
       const [r, g, b] = hslToRgb(hue / 360, 0.8, 0.25 + 0.35 * ratio);
-      rowImg.data[i * 4]     = r;
-      rowImg.data[i * 4 + 1] = g;
-      rowImg.data[i * 4 + 2] = b;
-      rowImg.data[i * 4 + 3] = 255;
+      colImg.data[i * 4]     = r;
+      colImg.data[i * 4 + 1] = g;
+      colImg.data[i * 4 + 2] = b;
+      colImg.data[i * 4 + 3] = 255;
     }
-    xSTBuf.putImageData(rowImg, 0, y);
+    xSTBuf.putImageData(colImg, x, 0);
   }
 
   function hslToRgb(h, s, l) {
@@ -464,19 +463,18 @@
     xST.fillStyle = "#0e1620";
     xST.fillRect(0, 0, cST.width, cST.height);
     xST.imageSmoothingEnabled = false;
+    // leave 30 px on the left for y-axis label and 16 px at the bottom for x-axis label
     xST.drawImage(stBuf, 30, 0, cST.width - 30, cST.height - 16);
     // labels
     xST.fillStyle = "rgba(230,237,243,0.55)";
     xST.font = "10px -apple-system, Segoe UI, sans-serif";
-    xST.textAlign = "left";
-    xST.fillText("0", 32, cST.height - 4);
-    xST.textAlign = "right";
-    xST.fillText("ring length", cST.width - 4, cST.height - 4);
+    xST.textAlign = "center";
+    xST.fillText("time (old → now)", (cST.width - 30) / 2 + 30, cST.height - 4);
     xST.save();
     xST.translate(10, cST.height / 2);
     xST.rotate(-Math.PI / 2);
     xST.textAlign = "center";
-    xST.fillText("time (old → now)", 0, 0);
+    xST.fillText("position on ring", 0, 0);
     xST.restore();
   }
 
