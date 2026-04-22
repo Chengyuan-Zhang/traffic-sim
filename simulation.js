@@ -293,18 +293,37 @@
     let sum = 0, mn = Infinity;
     for (const c of cars) { sum += c.v; if (c.v < mn) mn = c.v; }
     const avg = sum / cars.length;
-    const densPerKm = (cars.length / circumference()) * 1000;
+    const L = circumference();
+    const densPerKm = (cars.length / L) * 1000;
     const flowPerHr = densPerKm * avg * 3.6; // cars/km * km/h
     statAvg.textContent = avg.toFixed(1);
     statMin.textContent = mn.toFixed(1);
     statDens.textContent = densPerKm.toFixed(1);
     statFlow.textContent = Math.round(flowPerHr);
 
-    // feed chart buffers
+    // time series: global averages
     chartData.speed.push(avg);
     chartData.flow.push(flowPerHr);
     chartData.density.push(densPerKm);
-    chartData.fd.push({ k: densPerKm, q: flowPerHr });
+
+    // Fundamental diagram: use *local* (spatial-bin) density & flow so the
+    // scatter reveals the FD shape. Global N/L is constant on a ring road.
+    const NBINS = 12;
+    const binLen = L / NBINS;
+    const counts = new Array(NBINS).fill(0);
+    const sums = new Array(NBINS).fill(0);
+    for (const c of cars) {
+      const b = Math.floor((((c.s % L) + L) % L) / binLen);
+      counts[b]++;
+      sums[b] += c.v;
+    }
+    for (let b = 0; b < NBINS; b++) {
+      if (counts[b] === 0) continue;
+      const kLocal = (counts[b] / binLen) * 1000;              // veh/km
+      const vLocal = sums[b] / counts[b];                       // m/s
+      const qLocal = kLocal * vLocal * 3.6;                     // veh/hr
+      chartData.fd.push({ k: kLocal, q: qLocal });
+    }
     trimBuffers();
   }
 
