@@ -22,6 +22,10 @@
     gpKernel: "rbf",    // "rbf" | "matern52" | "matern32" | "matern12"
     noiseMode: "gp",    // "gp" | "ar" | "white"
     arOrder: 2,         // AR(p) order; uses paper-calibrated ρ for this order
+
+    // Measuring region on the ring (in degrees; 0 = top, clockwise).
+    regionCenter: 0,
+    regionSpan: 90,
   };
 
   // AR coefficients calibrated on HighD (5 fps) in arXiv:2307.03340, Table 1.
@@ -242,6 +246,37 @@
     ctx.setLineDash([]);
     ctx.restore();
 
+    // measuring region: highlight arc on the road
+    {
+      const L = circumference();
+      const sCenter = (params.regionCenter / 360) * L;
+      const halfLen = (params.regionSpan / 720) * L; // span/2 in meters
+      const metersToRadLocal = (m) => (m / L) * Math.PI * 2;
+      const a0 = metersToRadLocal(sCenter - halfLen) - Math.PI / 2;
+      const a1 = metersToRadLocal(sCenter + halfLen) - Math.PI / 2;
+      ctx.save();
+      ctx.strokeStyle = "rgba(255, 183, 77, 0.55)";
+      ctx.lineWidth = laneHalfPix * 2 + 6;
+      ctx.lineCap = "butt";
+      ctx.beginPath();
+      ctx.arc(cx, cy, rPix, a0, a1);
+      ctx.stroke();
+      // end markers
+      ctx.strokeStyle = "#ffb74d";
+      ctx.lineWidth = 2;
+      for (const a of [a0, a1]) {
+        const xIn = cx + (rPix - laneHalfPix - 4) * Math.cos(a);
+        const yIn = cy + (rPix - laneHalfPix - 4) * Math.sin(a);
+        const xOut = cx + (rPix + laneHalfPix + 4) * Math.cos(a);
+        const yOut = cy + (rPix + laneHalfPix + 4) * Math.sin(a);
+        ctx.beginPath();
+        ctx.moveTo(xIn, yIn);
+        ctx.lineTo(xOut, yOut);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+
     // cars
     const L = circumference();
     const metersToRad = (m) => (m / L) * Math.PI * 2;
@@ -288,41 +323,73 @@
   const statDens = document.getElementById("statDens");
   const statFlow = document.getElementById("statFlow");
 
+  // Is a car (at arclength s) inside the measuring region?
+  function inRegion(s, L) {
+    const sCenter = (params.regionCenter / 360) * L;
+    const halfLen = (params.regionSpan / 720) * L;
+    let d = ((s - sCenter) % L + L) % L;
+    if (d > L / 2) d -= L;
+    return Math.abs(d) <= halfLen;
+  }
+
   function updateStats() {
     if (!cars.length) return;
-    let sum = 0, mn = Infinity;
-    for (const c of cars) { sum += c.v; if (c.v < mn) mn = c.v; }
-    const avg = sum / cars.length;
     const L = circumference();
-    const densPerKm = (cars.length / L) * 1000;
-    const flowPerHr = densPerKm * avg * 3.6; // cars/km * km/h
-    statAvg.textContent = avg.toFixed(1);
-    statMin.textContent = mn.toFixed(1);
+    const sCenter = (params.regionCenter / 360) * L;
+    const halfLen = (params.regionSpan / 720) * L;
+    const regionLen = 2 * halfLen; // meters; may equal L when span = 360
+
+    // Collect cars in region and ring-wide stats (min/avg displayed for context)
+    let sumAll = 0, mnAll = Infinity;
+    let nReg = 0, sumVReg = 0, mnVReg = Infinity;
+    for (const c of cars) {
+      sumAll += c.v;
+      if (c.v < mnAll) mnAll = c.v;
+      if (inRegion(c.s, L)) {
+        nReg++;
+        sumVReg += c.v;
+        if (c.v < mnVReg) mnVReg = c.v;
+      }
+    }
+    const avgAll = sumAll / cars.length;
+    const avgReg = nReg > 0 ? sumVReg / nReg : 0;
+    const densPerKm = regionLen > 0 ? (nReg / regionLen) * 1000 : 0;
+    const flowPerHr = densPerKm * avgReg * 3.6;
+
+    statAvg.textContent = avgAll.toFixed(1);
+    statMin.textContent = (mnAll === Infinity ? 0 : mnAll).toFixed(1);
     statDens.textContent = densPerKm.toFixed(1);
     statFlow.textContent = Math.round(flowPerHr);
 
-    // time series: global averages
-    chartData.speed.push(avg);
+    // Region-scoped time series
+    chartData.speed.push(avgReg);
     chartData.flow.push(flowPerHr);
     chartData.density.push(densPerKm);
 
-    // Fundamental diagram: use *local* (spatial-bin) density & flow so the
-    // scatter reveals the FD shape. Global N/L is constant on a ring road.
-    const NBINS = 12;
-    const binLen = L / NBINS;
-    const counts = new Array(NBINS).fill(0);
-    const sums = new Array(NBINS).fill(0);
-    for (const c of cars) {
-      const b = Math.floor((((c.s % L) + L) % L) / binLen);
-      counts[b]++;
-      sums[b] += c.v;
-    }
-    for (let b = 0; b < NBINS; b++) {
-      if (counts[b] === 0) continue;
-      const kLocal = (counts[b] / binLen) * 1000;              // veh/km
-      const vLocal = sums[b] / counts[b];                       // m/s
-      const qLocal = kLocal * vLocal * 3.6;                     // veh/hr
-      chartData.fd.push({ k: kLocal, q: qLocal });
+    // Fundamental diagram: split the measuring region into sub-bins so we
+    // get a scatter (otherwise a single region gives one point per update).
+    const NBINS = 4;
+    const binLen = regionLen / NBINS;
+    if (binLen > 0) {
+      const counts = new Array(NBINS).fill(0);
+      const sums = new Array(NBINS).fill(0);
+      for (const c of cars) {
+        if (!inRegion(c.s, L)) continue;
+        // position within region: 0 at left (sCenter - halfLen) -> regionLen
+        let offset = ((c.s - (sCenter - halfLen)) % L + L) % L;
+        if (offset > regionLen) offset = regionLen; // safety
+        let b = Math.floor(offset / binLen);
+        if (b >= NBINS) b = NBINS - 1;
+        counts[b]++;
+        sums[b] += c.v;
+      }
+      for (let b = 0; b < NBINS; b++) {
+        if (counts[b] === 0) continue;
+        const kLocal = (counts[b] / binLen) * 1000;
+        const vLocal = sums[b] / counts[b];
+        const qLocal = kLocal * vLocal * 3.6;
+        chartData.fd.push({ k: kLocal, q: qLocal });
+      }
     }
     trimBuffers();
   }
@@ -629,6 +696,8 @@
   bindRange("radius", "radius");
   bindRange("speedMul", "speedMul", (v) => v.toFixed(2) + "×");
   bindRange("dtStep", "dtStep", (v) => v.toFixed(2));
+  bindRange("regionCenter", "regionCenter", (v) => String(v | 0) + "°");
+  bindRange("regionSpan", "regionSpan", (v) => String(v | 0) + "°");
   bindRange("gpSigma", "gpSigma", (v) => v.toFixed(2));
   bindRange("gpEll", "gpEll", (v) => v.toFixed(1));
 

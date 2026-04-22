@@ -66,6 +66,18 @@
       </div>
 
       <div class="gp-group">
+        <div class="gp-title">Measuring region (for density / flow / FD)</div>
+        <div class="control">
+          <label for="regionCenter">Center angle (°, 0 = top, CW): <span id="regionCenterVal">0</span></label>
+          <input type="range" id="regionCenter" min="0" max="359" value="0" step="1" />
+        </div>
+        <div class="control">
+          <label for="regionSpan">Arc span (°): <span id="regionSpanVal">90</span></label>
+          <input type="range" id="regionSpan" min="10" max="360" value="90" step="5" />
+        </div>
+      </div>
+
+      <div class="gp-group">
         <div class="gp-title">
           Driver noise (MA-IDM)
           <a href="https://arxiv.org/abs/2210.03571" target="_blank" rel="noopener" title="Zhang &amp; Sun, 2024">?</a>
@@ -130,15 +142,15 @@
       <canvas id="chartSpeed" width="600" height="160"></canvas>
     </div>
     <div class="chart-card">
-      <h3>Flow <span class="unit">(cars / hr)</span></h3>
+      <h3>Flow <span class="unit">(cars / hr, region)</span></h3>
       <canvas id="chartFlow" width="600" height="160"></canvas>
     </div>
     <div class="chart-card">
-      <h3>Density <span class="unit">(cars / km)</span></h3>
+      <h3>Density <span class="unit">(cars / km, region)</span></h3>
       <canvas id="chartDensity" width="600" height="160"></canvas>
     </div>
     <div class="chart-card">
-      <h3>Fundamental diagram <span class="unit">(flow vs density)</span></h3>
+      <h3>Fundamental diagram <span class="unit">(flow vs density, region sub-bins)</span></h3>
       <canvas id="chartFD" width="600" height="240"></canvas>
     </div>
     <div class="chart-card chart-wide">
