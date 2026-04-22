@@ -16,10 +16,11 @@
     radius: 120,   // meters
     speedMul: 1.0,
     dtStep: 0.05,  // integration step size (s)
-    // MA-IDM GP noise (arXiv:2210.03571)
+    // GP driver noise (arXiv:2210.03571) with choice of kernel
     gpSigma: 0.0,       // output scale (m/s^2); 0 disables noise
     gpEll: 5.0,         // lengthscale (seconds); paper: ~5 s for humans
-    noiseMode: "rbf",   // "rbf" (MA-IDM) | "ar" (AR(1)) | "white" (B-IDM)
+    gpKernel: "rbf",    // "rbf" | "matern52" | "matern32" | "matern12"
+    noiseMode: "gp",    // "gp" | "ar" | "white"
     arPhi: 0.8,         // AR(1) coefficient (stationary iff |phi|<1)
   };
 
@@ -35,19 +36,38 @@
   let simTime = 0;  // shared continuous clock fed to the GP
 
   function randn() {
-    // Box-Muller
     let u = 0, v = 0;
     while (u === 0) u = Math.random();
     while (v === 0) v = Math.random();
     return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
   }
 
-  function sampleGPFeatures(ell) {
+  // Student-t sampler with integer df via Z / sqrt(W/df), W ~ chi-sq(df)
+  function studentT(df) {
+    let w = 0;
+    for (let i = 0; i < df; i++) { const z = randn(); w += z * z; }
+    return randn() * Math.sqrt(df / w);
+  }
+
+  // Spectral-density sampler for the chosen kernel (scale 1/ell).
+  // RBF:      S(w) ∝ exp(-w^2 * ell^2 / 2)              →  w ~ N(0, 1/ell^2)
+  // Matern-ν: S(w) ∝ (2ν/ell^2 + w^2)^{-(ν+1/2)}        →  w = T / ell,  T ~ t(2ν)
+  function sampleOmega(ell, kernel) {
     const inv = 1 / Math.max(0.01, ell);
+    switch (kernel) {
+      case "matern12": return studentT(1) * inv;   // exponential / OU
+      case "matern32": return studentT(3) * inv;
+      case "matern52": return studentT(5) * inv;
+      case "rbf":
+      default:         return randn() * inv;
+    }
+  }
+
+  function sampleGPFeatures(ell, kernel) {
     const omegas = new Float32Array(GP_M);
     const phases = new Float32Array(GP_M);
     for (let m = 0; m < GP_M; m++) {
-      omegas[m] = randn() * inv;
+      omegas[m] = sampleOmega(ell, kernel);
       phases[m] = Math.random() * 2 * Math.PI;
     }
     return { omegas, phases };
@@ -82,7 +102,7 @@
   }
 
   function resampleAllGP() {
-    for (const c of cars) c.gp = sampleGPFeatures(params.gpEll);
+    for (const c of cars) c.gp = sampleGPFeatures(params.gpEll, params.gpKernel);
   }
 
   let cars = [];        // {s: position along ring (m), v: speed (m/s), color, perturb?}
@@ -108,7 +128,7 @@
         v: params.v0 * 0.8,
         color: colorFor(i, n),
         perturbUntil: 0,
-        gp: sampleGPFeatures(params.gpEll),
+        gp: sampleGPFeatures(params.gpEll, params.gpKernel),
         arEps: 0,
         arAccum: 0,
       });
@@ -138,7 +158,7 @@
       if (gap < 0) gap += L;
       let acc = idmAccel(me.v, lead.v, gap);
 
-      // Driver noise: MA-IDM (GP), AR(1), or B-IDM baseline (white)
+      // Driver noise: GP (MA-IDM), AR(1), or white (B-IDM baseline)
       if (params.gpSigma > 0) {
         if (params.noiseMode === "white") acc += whiteNoise();
         else if (params.noiseMode === "ar") acc += arNoise(me, dt);
@@ -574,17 +594,25 @@
   bindRange("gpEll", "gpEll", (v) => v.toFixed(1));
   bindRange("arPhi", "arPhi", (v) => v.toFixed(2));
 
-  // Changing lengthscale requires resampling frequencies
+  // Changing lengthscale or kernel requires resampling frequencies
   document.getElementById("gpEll").addEventListener("change", resampleAllGP);
+  const gpKernelEl = document.getElementById("gpKernel");
+  gpKernelEl.addEventListener("change", () => {
+    params.gpKernel = gpKernelEl.value;
+    resampleAllGP();
+  });
 
   // Noise model toggle — show only the controls relevant to the chosen model
   const noiseModeEl = document.getElementById("noiseMode");
   const ellRow = document.getElementById("ellRow");
+  const kernelRow = document.getElementById("kernelRow");
   const arRow = document.getElementById("arRow");
   function applyNoiseMode() {
     params.noiseMode = noiseModeEl.value;
-    ellRow.style.display = params.noiseMode === "rbf" ? "" : "none";
-    arRow.style.display  = params.noiseMode === "ar"  ? "" : "none";
+    const isGP = params.noiseMode === "gp";
+    ellRow.style.display    = isGP ? "" : "none";
+    kernelRow.style.display = isGP ? "" : "none";
+    arRow.style.display     = params.noiseMode === "ar" ? "" : "none";
   }
   noiseModeEl.addEventListener("change", applyNoiseMode);
   applyNoiseMode();
