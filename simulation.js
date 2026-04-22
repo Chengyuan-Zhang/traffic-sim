@@ -18,7 +18,8 @@
     // MA-IDM GP noise (arXiv:2210.03571)
     gpSigma: 0.0,       // output scale (m/s^2); 0 disables noise
     gpEllFrames: 25,    // lengthscale in frames @ 5 fps (paper uses this unit)
-    noiseMode: "rbf",   // "rbf" (MA-IDM) or "white" (B-IDM baseline)
+    noiseMode: "rbf",   // "rbf" (MA-IDM) | "ar" (AR(1)) | "white" (B-IDM)
+    arPhi: 0.8,         // AR(1) coefficient (stationary iff |phi|<1)
   };
 
   // Paper downsamples HighD to 5 fps, so 1 frame = 0.2 s
@@ -67,6 +68,19 @@
     return params.gpSigma * randn();
   }
 
+  // AR(1): eps_t = phi * eps_{t-1} + innov,  innov ~ N(0, sigma_innov^2)
+  // With sigma = stationary std, sigma_innov = sigma * sqrt(1 - phi^2)
+  function arNoise(car, dt) {
+    car.arAccum = (car.arAccum || 0) + dt;
+    while (car.arAccum >= FRAME_DT) {
+      const phi = params.arPhi;
+      const innov = params.gpSigma * Math.sqrt(Math.max(0, 1 - phi * phi)) * randn();
+      car.arEps = phi * (car.arEps || 0) + innov;
+      car.arAccum -= FRAME_DT;
+    }
+    return car.arEps || 0;
+  }
+
   function resampleAllGP() {
     for (const c of cars) c.gp = sampleGPFeatures(ellSeconds());
   }
@@ -95,6 +109,8 @@
         color: colorFor(i, n),
         perturbUntil: 0,
         gp: sampleGPFeatures(ellSeconds()),
+        arEps: 0,
+        arAccum: 0,
       });
     }
     simTime = 0;
@@ -122,9 +138,11 @@
       if (gap < 0) gap += L;
       let acc = idmAccel(me.v, lead.v, gap);
 
-      // Driver noise: MA-IDM (GP) or B-IDM baseline (white)
+      // Driver noise: MA-IDM (GP), AR(1), or B-IDM baseline (white)
       if (params.gpSigma > 0) {
-        acc += params.noiseMode === "white" ? whiteNoise() : gpNoise(me);
+        if (params.noiseMode === "white") acc += whiteNoise();
+        else if (params.noiseMode === "ar") acc += arNoise(me, dt);
+        else acc += gpNoise(me);
       }
 
       if (me.perturbUntil > 0) {
@@ -550,18 +568,23 @@
     const s = (v * FRAME_DT).toFixed(1);
     return `${v} (≈ ${s} s)`;
   });
+  bindRange("arPhi", "arPhi", (v) => v.toFixed(2));
 
   // Changing lengthscale requires resampling frequencies
   document.getElementById("gpEll").addEventListener("change", resampleAllGP);
 
-  // Noise model toggle
+  // Noise model toggle — show only the controls relevant to the chosen model
   const noiseModeEl = document.getElementById("noiseMode");
   const ellRow = document.getElementById("ellRow");
+  const arRow = document.getElementById("arRow");
   function applyNoiseMode() {
     params.noiseMode = noiseModeEl.value;
-    // Hide lengthscale for white-noise mode
-    ellRow.style.opacity = params.noiseMode === "white" ? "0.35" : "1";
-    ellRow.style.pointerEvents = params.noiseMode === "white" ? "none" : "auto";
+    const show = (el, on) => {
+      el.style.opacity = on ? "1" : "0.35";
+      el.style.pointerEvents = on ? "auto" : "none";
+    };
+    show(ellRow, params.noiseMode === "rbf");
+    show(arRow, params.noiseMode === "ar");
   }
   noiseModeEl.addEventListener("change", applyNoiseMode);
   applyNoiseMode();

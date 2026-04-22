@@ -13,8 +13,9 @@
       Cars drive around a circular track using the Intelligent Driver Model (IDM).
       Even without obstacles, small perturbations grow into stop-and-go waves —
       the classic <a href="https://en.wikipedia.org/wiki/Traffic_flow#Sugiyama_experiment" target="_blank" rel="noopener">Sugiyama experiment</a>.
-      Enable the <strong>GP noise</strong> slider to add temporally-correlated driver noise
-      (<a href="https://arxiv.org/abs/2210.03571" target="_blank" rel="noopener">MA-IDM, Zhang &amp; Sun 2024</a>).
+      Enable the <strong>Driver noise</strong> slider to add stochastic acceleration error —
+      compare white noise (B-IDM), an RBF GP (<a href="https://arxiv.org/abs/2210.03571" target="_blank" rel="noopener">MA-IDM</a>),
+      and an AR(1) process (<a href="https://arxiv.org/abs/2307.03340" target="_blank" rel="noopener">dynamic regression IDM</a>).
     </p>
   </header>
 
@@ -68,6 +69,7 @@
           <label for="noiseMode">Noise model</label>
           <select id="noiseMode">
             <option value="rbf" selected>RBF Gaussian process (MA-IDM)</option>
+            <option value="ar">AR(1) autoregressive process</option>
             <option value="white">White noise (B-IDM baseline)</option>
           </select>
         </div>
@@ -78,6 +80,10 @@
         <div class="control" id="ellRow">
           <label for="gpEll">ℓ — lengthscale (frames @ 5 fps): <span id="gpEllVal">25</span></label>
           <input type="range" id="gpEll" min="0.5" max="50" value="25" step="0.5" />
+        </div>
+        <div class="control" id="arRow">
+          <label for="arPhi">φ — AR(1) coefficient: <span id="arPhiVal">0.80</span></label>
+          <input type="range" id="arPhi" min="0" max="0.98" value="0.8" step="0.02" />
         </div>
       </div>
 
