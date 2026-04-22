@@ -21,7 +21,21 @@
     gpEll: 5.0,         // lengthscale (seconds); paper: ~5 s for humans
     gpKernel: "rbf",    // "rbf" | "matern52" | "matern32" | "matern12"
     noiseMode: "gp",    // "gp" | "ar" | "white"
-    arPhi: 0.8,         // AR(1) coefficient (stationary iff |phi|<1)
+    arOrder: 2,         // AR(p) order; uses paper-calibrated ρ for this order
+  };
+
+  // AR coefficients calibrated on HighD (5 fps) in arXiv:2307.03340, Table 1.
+  // Keys = AR order p; values = [rho_1, rho_2, ..., rho_p].
+  // When noise mode is "ar", sigma controls the innovation std (the paper's
+  // calibrated sigma_eta ~ 0.019 m/s^2 is too small for a visible toy sim).
+  const AR_COEFFS = {
+    1: [0.989],
+    2: [1.234, -0.247],
+    3: [1.123,  0.425, -0.572],
+    4: [0.901,  0.590, -0.149, -0.377],
+    5: [0.874,  0.580, -0.105, -0.315, -0.071],
+    6: [0.902,  0.632, -0.100, -0.427, -0.217,  0.181],
+    7: [0.866,  0.690, -0.001, -0.413, -0.378, -0.032,  0.248],
   };
 
   // Paper downsamples HighD to 5 fps, so 1 frame = 0.2 s (used by AR update cadence)
@@ -88,17 +102,23 @@
     return params.gpSigma * randn();
   }
 
-  // AR(1): eps_t = phi * eps_{t-1} + innov,  innov ~ N(0, sigma_innov^2)
-  // With sigma = stationary std, sigma_innov = sigma * sqrt(1 - phi^2)
+  // AR(p) with fixed paper coefficients: eps_t = sum_k rho_k * eps_{t-k} + innov
+  // Updates at the paper's 5 fps cadence (FRAME_DT = 0.2 s). Innovation std = sigma.
   function arNoise(car, dt) {
+    const rho = AR_COEFFS[params.arOrder] || AR_COEFFS[1];
+    const p = rho.length;
+    if (!car.arHist || car.arHist.length !== p) car.arHist = new Array(p).fill(0);
     car.arAccum = (car.arAccum || 0) + dt;
     while (car.arAccum >= FRAME_DT) {
-      const phi = params.arPhi;
-      const innov = params.gpSigma * Math.sqrt(Math.max(0, 1 - phi * phi)) * randn();
-      car.arEps = phi * (car.arEps || 0) + innov;
+      let mean = 0;
+      for (let k = 0; k < p; k++) mean += rho[k] * car.arHist[k];
+      const next = mean + params.gpSigma * randn();
+      // shift history: arHist[0] is the most recent
+      for (let k = p - 1; k > 0; k--) car.arHist[k] = car.arHist[k - 1];
+      car.arHist[0] = next;
       car.arAccum -= FRAME_DT;
     }
-    return car.arEps || 0;
+    return car.arHist[0];
   }
 
   function resampleAllGP() {
@@ -129,7 +149,7 @@
         color: colorFor(i, n),
         perturbUntil: 0,
         gp: sampleGPFeatures(params.gpEll, params.gpKernel),
-        arEps: 0,
+        arHist: [],
         arAccum: 0,
       });
     }
@@ -592,7 +612,18 @@
   bindRange("dtStep", "dtStep", (v) => v.toFixed(2));
   bindRange("gpSigma", "gpSigma", (v) => v.toFixed(2));
   bindRange("gpEll", "gpEll", (v) => v.toFixed(1));
-  bindRange("arPhi", "arPhi", (v) => v.toFixed(2));
+
+  // AR order dropdown (not a range slider)
+  const arOrderEl = document.getElementById("arOrder");
+  const arOrderVal = document.getElementById("arOrderVal");
+  function applyArOrder() {
+    params.arOrder = parseInt(arOrderEl.value, 10);
+    arOrderVal.textContent = params.arOrder;
+    // Reset per-car AR history so the change takes effect cleanly
+    for (const c of cars) { c.arHist = []; c.arAccum = 0; }
+  }
+  arOrderEl.addEventListener("change", applyArOrder);
+  applyArOrder();
 
   // Changing lengthscale or kernel requires resampling frequencies
   document.getElementById("gpEll").addEventListener("change", resampleAllGP);
