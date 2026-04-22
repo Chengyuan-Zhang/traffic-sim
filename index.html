@@ -10,12 +10,22 @@
   <header>
     <h1>Ring-Road Traffic Simulation</h1>
     <p class="subtitle">
-      Cars drive around a circular track using the Intelligent Driver Model (IDM).
+      Cars drive around a circular track using the
+      <a href="https://doi.org/10.1103/PhysRevE.62.1805" target="_blank" rel="noopener">Intelligent Driver Model (IDM)</a>
+      of <a href="https://mtreiber.de/" target="_blank" rel="noopener">Martin Treiber</a> and co-authors.
       Even without obstacles, small perturbations grow into stop-and-go waves —
       the classic <a href="https://en.wikipedia.org/wiki/Traffic_flow#Sugiyama_experiment" target="_blank" rel="noopener">Sugiyama experiment</a>.
-      Enable the <strong>Driver noise</strong> slider to add stochastic acceleration error —
-      compare white noise (B-IDM), an RBF GP (<a href="https://arxiv.org/abs/2210.03571" target="_blank" rel="noopener">MA-IDM</a>),
-      and an AR(1) process (<a href="https://arxiv.org/abs/2307.03340" target="_blank" rel="noopener">dynamic regression IDM</a>).
+      Enable the <strong>Driver noise</strong> slider to add stochastic acceleration error and compare
+      three stochastic car-following models:
+      <em>white noise (B-IDM)</em>,
+      a Gaussian-process kernel from
+      <a href="https://arxiv.org/abs/2210.03571" target="_blank" rel="noopener">Zhang &amp; Sun (2024), MA-IDM</a>,
+      and an autoregressive process from
+      <a href="https://arxiv.org/abs/2307.03340" target="_blank" rel="noopener">Zhang, Chen &amp; Sun (2024), dynamic-regression IDM</a>.
+    </p>
+    <p class="tribute">
+      Inspired by and dedicated to <strong>Dr. Martin Treiber</strong>, whose work on the IDM and
+      stochastic car-following laid the foundation for this line of research.
     </p>
   </header>
 
@@ -57,7 +67,7 @@
 
       <div class="control">
         <label for="speedMul">Sim speed: <span id="speedMulVal">1.0×</span></label>
-        <input type="range" id="speedMul" min="0.25" max="4" value="1" step="0.25" />
+        <input type="range" id="speedMul" min="0.25" max="10" value="1" step="0.25" />
       </div>
 
       <div class="control">
@@ -66,7 +76,8 @@
       </div>
 
       <div class="gp-group">
-        <div class="gp-title">Measuring region (for density / flow / FD)</div>
+        <div class="gp-title">Measuring region (density / flow / FD)</div>
+        <div class="hint">Tip: click or drag on the ring to place the region center.</div>
         <div class="control">
           <label for="regionCenter">Center angle (°, 0 = top, CW): <span id="regionCenterVal">0</span></label>
           <input type="range" id="regionCenter" min="0" max="359" value="0" step="1" />
@@ -78,17 +89,18 @@
       </div>
 
       <div class="gp-group">
-        <div class="gp-title">
-          Driver noise (MA-IDM)
-          <a href="https://arxiv.org/abs/2210.03571" target="_blank" rel="noopener" title="Zhang &amp; Sun, 2024">?</a>
-        </div>
+        <div class="gp-title">Driver noise (stochastic car-following)</div>
         <div class="control">
           <label for="noiseMode">Noise model</label>
           <select id="noiseMode">
-            <option value="gp" selected>Gaussian process (MA-IDM)</option>
-            <option value="ar">AR(p) — dynamic regression IDM (fixed paper ρ)</option>
-            <option value="white">White noise (B-IDM baseline)</option>
+            <option value="gp" selected>Gaussian process — MA-IDM (Zhang &amp; Sun, 2024)</option>
+            <option value="ar">AR(p) — dynamic-regression IDM (Zhang, Chen &amp; Sun, 2024)</option>
+            <option value="white">White noise — B-IDM baseline</option>
           </select>
+        </div>
+        <div class="hint" id="modeCite">
+          Gaussian-process noise with a stationary kernel, from
+          <a href="https://arxiv.org/abs/2210.03571" target="_blank" rel="noopener">Zhang &amp; Sun (2024) — MA-IDM</a>.
         </div>
         <div class="control">
           <label for="gpSigma">σ — noise scale (m/s²): <span id="gpSigmaVal">0.00</span></label>
@@ -104,8 +116,8 @@
           </select>
         </div>
         <div class="control" id="ellRow">
-          <label for="gpEll">ℓ — lengthscale (s): <span id="gpEllVal">5.0</span></label>
-          <input type="range" id="gpEll" min="0.1" max="10" value="5.0" step="0.1" />
+          <label for="gpEll">ℓ — lengthscale (s): <span id="gpEllVal">2.0</span></label>
+          <input type="range" id="gpEll" min="0.1" max="5.0" value="2.0" step="0.1" />
         </div>
         <div class="control" id="arRow">
           <label for="arOrder">AR order p (paper coefficients): <span id="arOrderVal">2</span></label>
@@ -161,6 +173,10 @@
 
   <footer>
     <p>Source on <a href="https://github.com/Chengyuan-Zhang/traffic-sim" target="_blank" rel="noopener">GitHub</a>.</p>
+    <p class="tribute-small">
+      With gratitude to <strong>Dr. Martin Treiber</strong> — inventor of the IDM and pioneer of
+      stochastic car-following — whose research inspired this simulator.
+    </p>
   </footer>
 
   <script src="simulation.js"></script>

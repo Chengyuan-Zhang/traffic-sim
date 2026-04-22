@@ -233,3 +233,29 @@ footer a { color: var(--accent); }
   border-radius: 6px;
   font-size: 0.88rem;
 }
+
+.hint {
+  font-size: 0.78rem;
+  color: rgba(230,237,243,0.6);
+  line-height: 1.4;
+}
+.hint a { color: var(--accent-2); }
+
+.tribute {
+  font-size: 0.85rem;
+  color: rgba(230,237,243,0.65);
+  font-style: italic;
+  margin-top: 6px;
+  padding: 8px 12px;
+  border-left: 3px solid var(--accent-2);
+  background: rgba(255,183,77,0.06);
+  border-radius: 4px;
+}
+
+.stage canvas#road { cursor: crosshair; }
+
+.tribute-small {
+  font-size: 0.82rem;
+  color: rgba(230,237,243,0.55);
+  margin-top: 4px;
+}

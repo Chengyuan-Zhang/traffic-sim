@@ -18,7 +18,7 @@
     dtStep: 0.05,  // integration step size (s)
     // GP driver noise (arXiv:2210.03571) with choice of kernel
     gpSigma: 0.0,       // output scale (m/s^2); 0 disables noise
-    gpEll: 5.0,         // lengthscale (seconds); paper: ~5 s for humans
+    gpEll: 2.0,         // lengthscale (seconds)
     gpKernel: "rbf",    // "rbf" | "matern52" | "matern32" | "matern12"
     noiseMode: "gp",    // "gp" | "ar" | "white"
     arOrder: 2,         // AR(p) order; uses paper-calibrated ρ for this order
@@ -721,20 +721,59 @@
     resampleAllGP();
   });
 
-  // Noise model toggle — show only the controls relevant to the chosen model
+  // Noise model toggle — show only the controls relevant to the chosen model,
+  // and swap the inline citation so the user knows which paper each noise comes from.
   const noiseModeEl = document.getElementById("noiseMode");
   const ellRow = document.getElementById("ellRow");
   const kernelRow = document.getElementById("kernelRow");
   const arRow = document.getElementById("arRow");
+  const modeCite = document.getElementById("modeCite");
+  const CITE = {
+    gp: 'Gaussian-process noise with a stationary kernel, from '
+      + '<a href="https://arxiv.org/abs/2210.03571" target="_blank" rel="noopener">Zhang &amp; Sun (2024) — MA-IDM</a>. '
+      + 'Realized here via M = 32 random Fourier features per car.',
+    ar: 'AR(p) noise with posterior-mean coefficients ρ from Table 1 of '
+      + '<a href="https://arxiv.org/abs/2307.03340" target="_blank" rel="noopener">Zhang, Chen &amp; Sun (2024) — dynamic-regression IDM</a>, '
+      + 'calibrated on HighD at 5 fps. σ here is the innovation std σ<sub>η</sub>.',
+    white: 'I.i.d. Gaussian driver noise — the Bayesian IDM (B-IDM) baseline '
+      + 'used for comparison in both Zhang &amp; Sun (2024) and Zhang, Chen &amp; Sun (2024).',
+  };
   function applyNoiseMode() {
     params.noiseMode = noiseModeEl.value;
     const isGP = params.noiseMode === "gp";
     ellRow.style.display    = isGP ? "" : "none";
     kernelRow.style.display = isGP ? "" : "none";
     arRow.style.display     = params.noiseMode === "ar" ? "" : "none";
+    if (modeCite) modeCite.innerHTML = CITE[params.noiseMode] || "";
   }
   noiseModeEl.addEventListener("change", applyNoiseMode);
   applyNoiseMode();
+
+  // Click / drag on the ring canvas to place the measuring-region center.
+  // Angle convention: 0° = top, clockwise (matches drawing and params.regionCenter).
+  const regionCenterEl = document.getElementById("regionCenter");
+  function setRegionFromEvent(e) {
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left - rect.width / 2;
+    const y = e.clientY - rect.top - rect.height / 2;
+    if (x * x + y * y < 100) return; // ignore tiny clicks near center
+    // atan2 with flipped y; add 90° so 0° = top, then wrap to [0, 360)
+    let deg = (Math.atan2(y, x) * 180) / Math.PI + 90;
+    deg = ((deg % 360) + 360) % 360;
+    regionCenterEl.value = Math.round(deg);
+    regionCenterEl.dispatchEvent(new Event("input", { bubbles: true }));
+  }
+  let dragging = false;
+  canvas.addEventListener("pointerdown", (e) => {
+    dragging = true;
+    canvas.setPointerCapture(e.pointerId);
+    setRegionFromEvent(e);
+  });
+  canvas.addEventListener("pointermove", (e) => { if (dragging) setRegionFromEvent(e); });
+  canvas.addEventListener("pointerup", (e) => {
+    dragging = false;
+    try { canvas.releasePointerCapture(e.pointerId); } catch (_) {}
+  });
 
   // numCars & radius need reinit
   document.getElementById("numCars").addEventListener("change", initCars);
