@@ -223,3 +223,13 @@ footer a { color: var(--accent); }
   font-size: 0.75rem;
   text-decoration: none;
 }
+
+.gp-group select {
+  width: 100%;
+  padding: 6px 8px;
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid #2e3d4f;
+  border-radius: 6px;
+  font-size: 0.88rem;
+}

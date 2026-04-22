@@ -16,9 +16,14 @@
     radius: 120,   // meters
     speedMul: 1.0,
     // MA-IDM GP noise (arXiv:2210.03571)
-    gpSigma: 0.0,  // output scale (m/s^2); 0 disables noise
-    gpEll: 2.0,    // lengthscale (s)
+    gpSigma: 0.0,       // output scale (m/s^2); 0 disables noise
+    gpEllFrames: 25,    // lengthscale in frames @ 5 fps (paper uses this unit)
+    noiseMode: "rbf",   // "rbf" (MA-IDM) or "white" (B-IDM baseline)
   };
+
+  // Paper downsamples HighD to 5 fps, so 1 frame = 0.2 s
+  const FRAME_DT = 0.2;
+  const ellSeconds = () => params.gpEllFrames * FRAME_DT;
 
   // Random Fourier Features for a zero-mean GP with RBF kernel
   //   k(t,t') = sigma^2 * exp(-(t-t')^2 / (2*ell^2))
@@ -48,7 +53,7 @@
   }
 
   function gpNoise(car) {
-    // sigma * sqrt(2/M) * sum cos(w_m * t + b_m)
+    // MA-IDM: sigma * sqrt(2/M) * sum cos(w_m * t + b_m)
     let s = 0;
     const om = car.gp.omegas, ph = car.gp.phases;
     for (let m = 0; m < GP_M; m++) {
@@ -57,8 +62,13 @@
     return params.gpSigma * Math.sqrt(2 / GP_M) * s;
   }
 
+  function whiteNoise() {
+    // B-IDM baseline: i.i.d. Gaussian at each sim step
+    return params.gpSigma * randn();
+  }
+
   function resampleAllGP() {
-    for (const c of cars) c.gp = sampleGPFeatures(params.gpEll);
+    for (const c of cars) c.gp = sampleGPFeatures(ellSeconds());
   }
 
   let cars = [];        // {s: position along ring (m), v: speed (m/s), color, perturb?}
@@ -84,7 +94,7 @@
         v: params.v0 * 0.8,
         color: colorFor(i, n),
         perturbUntil: 0,
-        gp: sampleGPFeatures(params.gpEll),
+        gp: sampleGPFeatures(ellSeconds()),
       });
     }
     simTime = 0;
@@ -112,8 +122,10 @@
       if (gap < 0) gap += L;
       let acc = idmAccel(me.v, lead.v, gap);
 
-      // MA-IDM: add temporally-correlated GP noise to acceleration
-      if (params.gpSigma > 0) acc += gpNoise(me);
+      // Driver noise: MA-IDM (GP) or B-IDM baseline (white)
+      if (params.gpSigma > 0) {
+        acc += params.noiseMode === "white" ? whiteNoise() : gpNoise(me);
+      }
 
       if (me.perturbUntil > 0) {
         acc = Math.min(acc, -4.0);
@@ -536,10 +548,25 @@
   bindRange("radius", "radius");
   bindRange("speedMul", "speedMul", (v) => v.toFixed(2) + "×");
   bindRange("gpSigma", "gpSigma", (v) => v.toFixed(2));
-  bindRange("gpEll", "gpEll", (v) => v.toFixed(1));
+  bindRange("gpEll", "gpEllFrames", (v) => {
+    const s = (v * FRAME_DT).toFixed(1);
+    return `${v} (≈ ${s} s)`;
+  });
 
   // Changing lengthscale requires resampling frequencies
   document.getElementById("gpEll").addEventListener("change", resampleAllGP);
+
+  // Noise model toggle
+  const noiseModeEl = document.getElementById("noiseMode");
+  const ellRow = document.getElementById("ellRow");
+  function applyNoiseMode() {
+    params.noiseMode = noiseModeEl.value;
+    // Hide lengthscale for white-noise mode
+    ellRow.style.opacity = params.noiseMode === "white" ? "0.35" : "1";
+    ellRow.style.pointerEvents = params.noiseMode === "white" ? "none" : "auto";
+  }
+  noiseModeEl.addEventListener("change", applyNoiseMode);
+  applyNoiseMode();
 
   // numCars & radius need reinit
   document.getElementById("numCars").addEventListener("change", initCars);

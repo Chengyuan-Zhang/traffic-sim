@@ -61,16 +61,23 @@
 
       <div class="gp-group">
         <div class="gp-title">
-          GP noise (MA-IDM)
+          Driver noise (MA-IDM)
           <a href="https://arxiv.org/abs/2210.03571" target="_blank" rel="noopener" title="Zhang &amp; Sun, 2024">?</a>
         </div>
         <div class="control">
-          <label for="gpSigma">σ — noise scale (m/s²): <span id="gpSigmaVal">0.0</span></label>
-          <input type="range" id="gpSigma" min="0" max="1.0" value="0.0" step="0.05" />
+          <label for="noiseMode">Noise model</label>
+          <select id="noiseMode">
+            <option value="rbf" selected>RBF Gaussian process (MA-IDM)</option>
+            <option value="white">White noise (B-IDM baseline)</option>
+          </select>
         </div>
         <div class="control">
-          <label for="gpEll">ℓ — lengthscale (s): <span id="gpEllVal">2.0</span></label>
-          <input type="range" id="gpEll" min="0.1" max="10" value="2.0" step="0.1" />
+          <label for="gpSigma">σ — noise scale (m/s²): <span id="gpSigmaVal">0.00</span></label>
+          <input type="range" id="gpSigma" min="0" max="1.0" value="0.0" step="0.05" />
+        </div>
+        <div class="control" id="ellRow">
+          <label for="gpEll">ℓ — lengthscale (frames @ 5 fps): <span id="gpEllVal">25</span></label>
+          <input type="range" id="gpEll" min="0.5" max="50" value="25" step="0.5" />
         </div>
       </div>
 
