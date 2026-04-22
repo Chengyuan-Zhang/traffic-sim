@@ -15,16 +15,16 @@
     carLength: 4.5,
     radius: 120,   // meters
     speedMul: 1.0,
+    dtStep: 0.05,  // integration step size (s)
     // MA-IDM GP noise (arXiv:2210.03571)
     gpSigma: 0.0,       // output scale (m/s^2); 0 disables noise
-    gpEllFrames: 25,    // lengthscale in frames @ 5 fps (paper uses this unit)
+    gpEll: 5.0,         // lengthscale (seconds); paper: ~5 s for humans
     noiseMode: "rbf",   // "rbf" (MA-IDM) | "ar" (AR(1)) | "white" (B-IDM)
     arPhi: 0.8,         // AR(1) coefficient (stationary iff |phi|<1)
   };
 
-  // Paper downsamples HighD to 5 fps, so 1 frame = 0.2 s
+  // Paper downsamples HighD to 5 fps, so 1 frame = 0.2 s (used by AR update cadence)
   const FRAME_DT = 0.2;
-  const ellSeconds = () => params.gpEllFrames * FRAME_DT;
 
   // Random Fourier Features for a zero-mean GP with RBF kernel
   //   k(t,t') = sigma^2 * exp(-(t-t')^2 / (2*ell^2))
@@ -82,7 +82,7 @@
   }
 
   function resampleAllGP() {
-    for (const c of cars) c.gp = sampleGPFeatures(ellSeconds());
+    for (const c of cars) c.gp = sampleGPFeatures(params.gpEll);
   }
 
   let cars = [];        // {s: position along ring (m), v: speed (m/s), color, perturb?}
@@ -108,7 +108,7 @@
         v: params.v0 * 0.8,
         color: colorFor(i, n),
         perturbUntil: 0,
-        gp: sampleGPFeatures(ellSeconds()),
+        gp: sampleGPFeatures(params.gpEll),
         arEps: 0,
         arAccum: 0,
       });
@@ -507,25 +507,31 @@
   // ---------- loop ----------
   let chartAccum = 0;
   let stAccum = 0;
+  let physAccum = 0;   // accumulates sim-time until the next integration step
   function tick(now) {
     const rawDt = Math.min(0.05, (now - lastTime) / 1000);
     lastTime = now;
     if (!paused) {
-      const dt = rawDt * params.speedMul;
-      const sub = Math.max(1, Math.ceil(dt / 0.02));
-      for (let i = 0; i < sub; i++) step(dt / sub);
-      chartAccum += dt;
-      stAccum += dt;
+      const simDt = rawDt * params.speedMul;
+      physAccum += simDt;
+      // Advance the physics in discrete user-sized Δt steps.
+      // Cap total work per frame so a sudden big Δt increase cannot freeze the tab.
+      let work = 0;
+      while (physAccum >= params.dtStep && work < 200) {
+        step(params.dtStep);
+        physAccum -= params.dtStep;
+        work++;
+      }
+      chartAccum += simDt;
+      stAccum += simDt;
     }
     draw();
     updateStats();
 
-    // push a space-time row ~every 0.25 sim-seconds
     if (stAccum >= 0.25) {
       pushSTRow();
       stAccum = 0;
     }
-    // repaint charts ~10 times/sec of wall-clock
     if (now - lastChartDraw > 100) {
       drawCharts();
       lastChartDraw = now;
@@ -563,11 +569,9 @@
   bindRange("b", "b", (v) => v.toFixed(1));
   bindRange("radius", "radius");
   bindRange("speedMul", "speedMul", (v) => v.toFixed(2) + "×");
+  bindRange("dtStep", "dtStep", (v) => v.toFixed(2));
   bindRange("gpSigma", "gpSigma", (v) => v.toFixed(2));
-  bindRange("gpEll", "gpEllFrames", (v) => {
-    const s = (v * FRAME_DT).toFixed(1);
-    return `${v} (≈ ${s} s)`;
-  });
+  bindRange("gpEll", "gpEll", (v) => v.toFixed(1));
   bindRange("arPhi", "arPhi", (v) => v.toFixed(2));
 
   // Changing lengthscale requires resampling frequencies

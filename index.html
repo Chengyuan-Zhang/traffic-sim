@@ -60,6 +60,11 @@
         <input type="range" id="speedMul" min="0.25" max="4" value="1" step="0.25" />
       </div>
 
+      <div class="control">
+        <label for="dtStep">Integration step Δt (s): <span id="dtStepVal">0.05</span></label>
+        <input type="range" id="dtStep" min="0.02" max="2.0" value="0.05" step="0.02" />
+      </div>
+
       <div class="gp-group">
         <div class="gp-title">
           Driver noise (MA-IDM)
@@ -78,8 +83,8 @@
           <input type="range" id="gpSigma" min="0" max="1.0" value="0.0" step="0.05" />
         </div>
         <div class="control" id="ellRow">
-          <label for="gpEll">ℓ — lengthscale (frames @ 5 fps): <span id="gpEllVal">25</span></label>
-          <input type="range" id="gpEll" min="0.5" max="50" value="25" step="0.5" />
+          <label for="gpEll">ℓ — lengthscale (s): <span id="gpEllVal">5.0</span></label>
+          <input type="range" id="gpEll" min="0.1" max="10" value="5.0" step="0.1" />
         </div>
         <div class="control" id="arRow">
           <label for="arPhi">φ — AR(1) coefficient: <span id="arPhiVal">0.80</span></label>
