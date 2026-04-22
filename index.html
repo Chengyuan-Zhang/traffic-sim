@@ -72,6 +72,29 @@
     </aside>
   </main>
 
+  <section class="charts">
+    <div class="chart-card">
+      <h3>Average speed <span class="unit">(m/s)</span></h3>
+      <canvas id="chartSpeed" width="600" height="160"></canvas>
+    </div>
+    <div class="chart-card">
+      <h3>Flow <span class="unit">(cars / hr)</span></h3>
+      <canvas id="chartFlow" width="600" height="160"></canvas>
+    </div>
+    <div class="chart-card">
+      <h3>Density <span class="unit">(cars / km)</span></h3>
+      <canvas id="chartDensity" width="600" height="160"></canvas>
+    </div>
+    <div class="chart-card">
+      <h3>Fundamental diagram <span class="unit">(flow vs density)</span></h3>
+      <canvas id="chartFD" width="600" height="240"></canvas>
+    </div>
+    <div class="chart-card chart-wide">
+      <h3>Space–time diagram <span class="unit">(time ↓, position →; dark = jam)</span></h3>
+      <canvas id="chartST" width="900" height="220"></canvas>
+    </div>
+  </section>
+
   <footer>
     <p>Source on <a href="https://github.com/Chengyuan-Zhang/traffic-sim" target="_blank" rel="noopener">GitHub</a>.</p>
   </footer>

@@ -148,4 +148,48 @@ footer {
   font-size: 0.85rem;
 }
 
+.charts {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 24px 24px;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+
+.chart-card {
+  background: var(--panel);
+  border-radius: 12px;
+  padding: 12px 14px;
+  box-shadow: 0 4px 14px rgba(0,0,0,0.3);
+}
+
+.chart-card.chart-wide { grid-column: 1 / -1; }
+
+.chart-card h3 {
+  margin: 0 0 8px;
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.chart-card h3 .unit {
+  color: var(--muted);
+  font-weight: 400;
+  font-size: 0.82rem;
+  margin-left: 4px;
+}
+
+.chart-card canvas {
+  width: 100%;
+  height: auto;
+  display: block;
+  background: #0e1620;
+  border-radius: 6px;
+}
+
+@media (max-width: 900px) {
+  .charts { grid-template-columns: 1fr; }
+}
+
 footer a { color: var(--accent); }

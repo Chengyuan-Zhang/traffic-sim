@@ -179,21 +179,290 @@
     statMin.textContent = mn.toFixed(1);
     statDens.textContent = densPerKm.toFixed(1);
     statFlow.textContent = Math.round(flowPerHr);
+
+    // feed chart buffers
+    chartData.speed.push(avg);
+    chartData.flow.push(flowPerHr);
+    chartData.density.push(densPerKm);
+    chartData.fd.push({ k: densPerKm, q: flowPerHr });
+    trimBuffers();
+  }
+
+  // ---------- charts ----------
+  const MAX_POINTS = 600; // ~ last 20s at 30fps updates, but we throttle below
+  const chartData = {
+    speed: [],
+    flow: [],
+    density: [],
+    fd: [],
+  };
+  function trimBuffers() {
+    for (const k of ["speed", "flow", "density"]) {
+      const arr = chartData[k];
+      if (arr.length > MAX_POINTS) arr.splice(0, arr.length - MAX_POINTS);
+    }
+    if (chartData.fd.length > 400) chartData.fd.splice(0, chartData.fd.length - 400);
+  }
+
+  const cSpeed = document.getElementById("chartSpeed");
+  const cFlow = document.getElementById("chartFlow");
+  const cDens = document.getElementById("chartDensity");
+  const cFD = document.getElementById("chartFD");
+  const cST = document.getElementById("chartST");
+  const xSpeed = cSpeed.getContext("2d");
+  const xFlow = cFlow.getContext("2d");
+  const xDens = cDens.getContext("2d");
+  const xFD = cFD.getContext("2d");
+  const xST = cST.getContext("2d");
+
+  function drawAxes(cx, w, h, yMax, yLabel, color) {
+    cx.fillStyle = "#0e1620";
+    cx.fillRect(0, 0, w, h);
+    // grid
+    cx.strokeStyle = "rgba(255,255,255,0.07)";
+    cx.lineWidth = 1;
+    cx.beginPath();
+    for (let i = 1; i < 4; i++) {
+      const y = (h * i) / 4;
+      cx.moveTo(30, y); cx.lineTo(w - 6, y);
+    }
+    cx.stroke();
+    // y-axis labels
+    cx.fillStyle = "rgba(230,237,243,0.55)";
+    cx.font = "10px -apple-system, Segoe UI, sans-serif";
+    cx.textAlign = "right";
+    cx.textBaseline = "middle";
+    for (let i = 0; i <= 4; i++) {
+      const y = (h * i) / 4;
+      const v = yMax * (1 - i / 4);
+      cx.fillText(formatTick(v), 26, y === 0 ? 8 : y === h ? h - 8 : y);
+    }
+    // axis line
+    cx.strokeStyle = "rgba(255,255,255,0.15)";
+    cx.beginPath();
+    cx.moveTo(30, 0); cx.lineTo(30, h);
+    cx.moveTo(30, h - 0.5); cx.lineTo(w, h - 0.5);
+    cx.stroke();
+  }
+
+  function formatTick(v) {
+    if (v >= 1000) return (v / 1000).toFixed(1) + "k";
+    if (v >= 100) return v.toFixed(0);
+    if (v >= 10) return v.toFixed(0);
+    return v.toFixed(1);
+  }
+
+  function drawLineChart(canvas, cx, data, color, yMaxHint) {
+    const w = canvas.width, h = canvas.height;
+    const yMax = Math.max(yMaxHint, ...(data.length ? data : [1])) * 1.1 || 1;
+    drawAxes(cx, w, h, yMax);
+
+    if (data.length < 2) return;
+    const x0 = 30, plotW = w - x0 - 6;
+    cx.strokeStyle = color;
+    cx.lineWidth = 1.5;
+    cx.beginPath();
+    for (let i = 0; i < data.length; i++) {
+      const x = x0 + (i / (MAX_POINTS - 1)) * plotW;
+      const y = h - (data[i] / yMax) * h;
+      if (i === 0) cx.moveTo(x, y); else cx.lineTo(x, y);
+    }
+    cx.stroke();
+
+    // fill under curve
+    cx.lineTo(x0 + ((data.length - 1) / (MAX_POINTS - 1)) * plotW, h);
+    cx.lineTo(x0, h);
+    cx.closePath();
+    const grad = cx.createLinearGradient(0, 0, 0, h);
+    grad.addColorStop(0, color + "55");
+    grad.addColorStop(1, color + "00");
+    cx.fillStyle = grad;
+    cx.fill();
+  }
+
+  function drawFD() {
+    const w = cFD.width, h = cFD.height;
+    // dynamic y-scale from current data, plus theoretical max guidance
+    const maxK = Math.max(80, ...chartData.fd.map(p => p.k)) * 1.1;
+    const maxQ = Math.max(1200, ...chartData.fd.map(p => p.q)) * 1.1;
+    drawAxes(xFD, w, h, maxQ);
+
+    const x0 = 30, plotW = w - x0 - 6;
+    // scatter: older points fade
+    const n = chartData.fd.length;
+    for (let i = 0; i < n; i++) {
+      const p = chartData.fd[i];
+      const x = x0 + (p.k / maxK) * plotW;
+      const y = h - (p.q / maxQ) * h;
+      const alpha = 0.15 + 0.85 * (i / n);
+      xFD.fillStyle = `rgba(79,195,247,${alpha.toFixed(2)})`;
+      xFD.beginPath();
+      xFD.arc(x, y, 2.2, 0, Math.PI * 2);
+      xFD.fill();
+    }
+    // highlight latest
+    if (n > 0) {
+      const p = chartData.fd[n - 1];
+      const x = x0 + (p.k / maxK) * plotW;
+      const y = h - (p.q / maxQ) * h;
+      xFD.strokeStyle = "#ffb74d";
+      xFD.lineWidth = 2;
+      xFD.beginPath();
+      xFD.arc(x, y, 4.5, 0, Math.PI * 2);
+      xFD.stroke();
+    }
+    // x-axis labels
+    xFD.fillStyle = "rgba(230,237,243,0.55)";
+    xFD.font = "10px -apple-system, Segoe UI, sans-serif";
+    xFD.textAlign = "center";
+    xFD.textBaseline = "bottom";
+    for (let i = 0; i <= 4; i++) {
+      const frac = i / 4;
+      const x = x0 + frac * plotW;
+      xFD.fillText(formatTick(maxK * frac), x, h - 2);
+    }
+    xFD.textAlign = "left";
+    xFD.fillText("density →", x0 + 4, 12);
+    xFD.save();
+    xFD.translate(10, h / 2);
+    xFD.rotate(-Math.PI / 2);
+    xFD.textAlign = "center";
+    xFD.fillText("flow", 0, 0);
+    xFD.restore();
+  }
+
+  // Space–time diagram: maintain an offscreen ImageBitmap-like buffer
+  const stBuf = document.createElement("canvas");
+  stBuf.width = 400;   // columns = position bins
+  stBuf.height = 300;  // rows = time samples (most recent at bottom)
+  const xSTBuf = stBuf.getContext("2d");
+  xSTBuf.fillStyle = "#0e1620";
+  xSTBuf.fillRect(0, 0, stBuf.width, stBuf.height);
+
+  function pushSTRow() {
+    if (!cars.length) return;
+    const L = circumference();
+    const cols = stBuf.width;
+    const binSum = new Float32Array(cols);
+    const binCnt = new Uint16Array(cols);
+    for (const c of cars) {
+      const idx = Math.min(cols - 1, Math.floor((c.s / L) * cols));
+      binSum[idx] += c.v;
+      binCnt[idx]++;
+    }
+    // scroll up by 1 row
+    const img = xSTBuf.getImageData(0, 1, stBuf.width, stBuf.height - 1);
+    xSTBuf.putImageData(img, 0, 0);
+    // build the new bottom row, carrying forward from the just-scrolled row above where empty
+    const y = stBuf.height - 1;
+    const aboveRow = xSTBuf.getImageData(0, y - 1, cols, 1).data;
+    const rowImg = xSTBuf.createImageData(cols, 1);
+    for (let i = 0; i < cols; i++) {
+      if (binCnt[i] === 0) {
+        rowImg.data[i * 4]     = aboveRow[i * 4];
+        rowImg.data[i * 4 + 1] = aboveRow[i * 4 + 1];
+        rowImg.data[i * 4 + 2] = aboveRow[i * 4 + 2];
+        rowImg.data[i * 4 + 3] = 255;
+        continue;
+      }
+      const v = binSum[i] / binCnt[i];
+      const ratio = Math.max(0, Math.min(1, v / params.v0));
+      const hue = Math.round(ratio * 120);
+      const [r, g, b] = hslToRgb(hue / 360, 0.8, 0.25 + 0.35 * ratio);
+      rowImg.data[i * 4]     = r;
+      rowImg.data[i * 4 + 1] = g;
+      rowImg.data[i * 4 + 2] = b;
+      rowImg.data[i * 4 + 3] = 255;
+    }
+    xSTBuf.putImageData(rowImg, 0, y);
+  }
+
+  function hslToRgb(h, s, l) {
+    let r, g, b;
+    if (s === 0) { r = g = b = l; }
+    else {
+      const hue2rgb = (p, q, t) => {
+        if (t < 0) t += 1;
+        if (t > 1) t -= 1;
+        if (t < 1/6) return p + (q - p) * 6 * t;
+        if (t < 1/2) return q;
+        if (t < 2/3) return p + (q - p) * (2/3 - t) * 6;
+        return p;
+      };
+      const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+      const p = 2 * l - q;
+      r = hue2rgb(p, q, h + 1/3);
+      g = hue2rgb(p, q, h);
+      b = hue2rgb(p, q, h - 1/3);
+    }
+    return [Math.round(r * 255), Math.round(g * 255), Math.round(b * 255)];
+  }
+
+  function drawST() {
+    xST.fillStyle = "#0e1620";
+    xST.fillRect(0, 0, cST.width, cST.height);
+    xST.imageSmoothingEnabled = false;
+    xST.drawImage(stBuf, 30, 0, cST.width - 30, cST.height - 16);
+    // labels
+    xST.fillStyle = "rgba(230,237,243,0.55)";
+    xST.font = "10px -apple-system, Segoe UI, sans-serif";
+    xST.textAlign = "left";
+    xST.fillText("0", 32, cST.height - 4);
+    xST.textAlign = "right";
+    xST.fillText("ring length", cST.width - 4, cST.height - 4);
+    xST.save();
+    xST.translate(10, cST.height / 2);
+    xST.rotate(-Math.PI / 2);
+    xST.textAlign = "center";
+    xST.fillText("time (old → now)", 0, 0);
+    xST.restore();
+  }
+
+  function drawCharts() {
+    drawLineChart(cSpeed, xSpeed, chartData.speed, "#4fc3f7", params.v0);
+    drawLineChart(cFlow, xFlow, chartData.flow, "#81c784", 800);
+    drawLineChart(cDens, xDens, chartData.density, "#ffb74d", 80);
+    drawFD();
+    drawST();
   }
 
   // ---------- loop ----------
+  let chartAccum = 0;
+  let stAccum = 0;
   function tick(now) {
     const rawDt = Math.min(0.05, (now - lastTime) / 1000);
     lastTime = now;
     if (!paused) {
-      // sub-step for stability
       const dt = rawDt * params.speedMul;
       const sub = Math.max(1, Math.ceil(dt / 0.02));
       for (let i = 0; i < sub; i++) step(dt / sub);
+      chartAccum += dt;
+      stAccum += dt;
     }
     draw();
     updateStats();
+
+    // push a space-time row ~every 0.25 sim-seconds
+    if (stAccum >= 0.25) {
+      pushSTRow();
+      stAccum = 0;
+    }
+    // repaint charts ~10 times/sec of wall-clock
+    if (now - lastChartDraw > 100) {
+      drawCharts();
+      lastChartDraw = now;
+    }
     requestAnimationFrame(tick);
+  }
+  let lastChartDraw = 0;
+
+  function resetCharts() {
+    chartData.speed.length = 0;
+    chartData.flow.length = 0;
+    chartData.density.length = 0;
+    chartData.fd.length = 0;
+    xSTBuf.fillStyle = "#0e1620";
+    xSTBuf.fillRect(0, 0, stBuf.width, stBuf.height);
   }
 
   // ---------- UI wiring ----------
@@ -227,7 +496,7 @@
     cars[idx].perturbUntil = 2.0; // seconds of hard braking
   });
 
-  document.getElementById("reset").addEventListener("click", initCars);
+  document.getElementById("reset").addEventListener("click", () => { initCars(); resetCharts(); });
 
   const pauseBtn = document.getElementById("pause");
   pauseBtn.addEventListener("click", () => {
