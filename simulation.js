@@ -583,12 +583,8 @@
   const arRow = document.getElementById("arRow");
   function applyNoiseMode() {
     params.noiseMode = noiseModeEl.value;
-    const show = (el, on) => {
-      el.style.opacity = on ? "1" : "0.35";
-      el.style.pointerEvents = on ? "auto" : "none";
-    };
-    show(ellRow, params.noiseMode === "rbf");
-    show(arRow, params.noiseMode === "ar");
+    ellRow.style.display = params.noiseMode === "rbf" ? "" : "none";
+    arRow.style.display  = params.noiseMode === "ar"  ? "" : "none";
   }
   noiseModeEl.addEventListener("change", applyNoiseMode);
   applyNoiseMode();
