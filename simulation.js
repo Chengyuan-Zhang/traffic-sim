@@ -6,19 +6,21 @@
 
   const params = {
     numCars: 30,
-    v0: 20,        // desired speed (m/s)
-    T: 1.5,        // safe time headway (s)
-    a: 1.0,        // max acceleration (m/s^2)
-    b: 2.0,        // comfortable deceleration (m/s^2)
-    s0: 2.0,       // minimum spacing (m)
+    // Defaults from Table 1 of arXiv:2307.03340 (B-IDM posterior means, HighD)
+    // and MA-IDM kernel params from arXiv:2210.03571.
+    v0: 21,        // desired speed (m/s)   [paper: 21.090]
+    T: 0.9,        // safe time headway (s) [paper: 0.946]
+    a: 0.5,        // max acceleration      [paper: 0.518]
+    b: 1.5,        // comfortable decel     [paper: 1.542]
+    s0: 3.7,       // minimum jam spacing   [paper: 3.724]
     delta: 4,      // IDM exponent
     carLength: 4.5,
     radius: 120,   // meters
     speedMul: 1.0,
     dtStep: 0.05,  // integration step size (s)
     // GP driver noise (arXiv:2210.03571) with choice of kernel
-    gpSigma: 0.0,       // output scale (m/s^2); 0 disables noise
-    gpEll: 2.0,         // lengthscale (seconds)
+    gpSigma: 0.20,      // output scale (m/s^2)  [MA-IDM: σ_k = 0.202]
+    gpEll: 1.4,         // lengthscale (seconds) [MA-IDM: ℓ = 1.44 s]
     gpKernel: "rbf",    // "rbf" | "matern52" | "matern32" | "matern12"
     noiseMode: "gp",    // "gp" | "ar" | "white"
     arOrder: 2,         // AR(p) order; uses paper-calibrated ρ for this order
