@@ -169,12 +169,6 @@
     <div class="chart-card">
       <h3>Fundamental diagram <span class="unit">(flow vs density, region sub-bins)</span></h3>
       <canvas id="chartFD" width="600" height="240"></canvas>
-      <div class="fd-axes">
-        <label for="fdMaxK">x-max density: <span id="fdMaxKVal">200</span> veh/km</label>
-        <input type="range" id="fdMaxK" min="20" max="500" value="200" step="10" />
-        <label for="fdMaxQ">y-max flow: <span id="fdMaxQVal">3000</span> veh/hr</label>
-        <input type="range" id="fdMaxQ" min="200" max="8000" value="3000" step="100" />
-      </div>
     </div>
     <div class="chart-card chart-wide">
       <h3>Time–space diagram <span class="unit">(time →, position ↑; dark = jam)</span></h3>
@@ -183,18 +177,35 @@
   </section>
 
   <section class="about">
-    <div class="about-card">
+    <div class="about-card author-card">
       <h2>Author &amp; contact</h2>
-      <p>
-        <strong>Chengyuan Zhang</strong> (<a href="mailto:enzozcy@gmail.com">enzozcy@gmail.com</a>)<br />
-        Department of Civil Engineering, McGill University, Montreal, Canada
-      </p>
-      <p class="contact-links">
-        <a href="https://enzozcy.github.io/" target="_blank" rel="noopener">Homepage</a> ·
-        <a href="https://github.com/Chengyuan-Zhang" target="_blank" rel="noopener">GitHub</a> ·
-        <a href="https://scholar.google.com/citations?user=ltmVCLMAAAAJ" target="_blank" rel="noopener">Google Scholar</a> ·
-        <a href="https://github.com/Chengyuan-Zhang/traffic-sim" target="_blank" rel="noopener">Source of this site</a>
-      </p>
+      <div class="author">
+        <div class="avatar" aria-hidden="true">CZ</div>
+        <div class="author-info">
+          <div class="author-name">Chengyuan Zhang</div>
+          <div class="author-affil">
+            Department of Civil Engineering<br />
+            McGill University, Montreal, Canada
+          </div>
+          <div class="author-email">
+            <a href="mailto:enzozcy@gmail.com">enzozcy@gmail.com</a>
+          </div>
+        </div>
+      </div>
+      <div class="contact-chips">
+        <a class="chip" href="https://enzozcy.github.io/" target="_blank" rel="noopener">
+          <span class="chip-icon">🌐</span><span>Homepage</span>
+        </a>
+        <a class="chip" href="https://github.com/Chengyuan-Zhang" target="_blank" rel="noopener">
+          <span class="chip-icon">⌗</span><span>GitHub</span>
+        </a>
+        <a class="chip" href="https://scholar.google.com/citations?user=ltmVCLMAAAAJ" target="_blank" rel="noopener">
+          <span class="chip-icon">🎓</span><span>Google Scholar</span>
+        </a>
+        <a class="chip" href="https://github.com/Chengyuan-Zhang/traffic-sim" target="_blank" rel="noopener">
+          <span class="chip-icon">★</span><span>Source</span>
+        </a>
+      </div>
     </div>
 
     <div class="about-card">

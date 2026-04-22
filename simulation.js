@@ -28,10 +28,6 @@
     // Measuring region on the ring (in degrees; 0 = top, clockwise).
     regionCenter: 0,
     regionSpan: 90,
-
-    // Fundamental-diagram axis maxes (user-adjustable)
-    fdMaxK: 200,   // density axis max (veh/km)
-    fdMaxQ: 3000,  // flow axis max (veh/hr)
   };
 
   // AR coefficients calibrated on HighD (5 fps) in arXiv:2307.03340, Table 1.
@@ -509,11 +505,43 @@
     cx.fill();
   }
 
+  // Smoothed auto-scale for FD axes. Base the scale on the 98th percentile of
+  // points within a recent window so a handful of outliers don't dominate,
+  // round up to a "nice" number, and ease toward the target so the axis
+  // doesn't flicker every frame.
+  const fdAxes = { maxK: 80, maxQ: 1200 };
+  function niceCeil(v) {
+    if (!isFinite(v) || v <= 0) return 1;
+    const p = Math.pow(10, Math.floor(Math.log10(v)));
+    const m = v / p;
+    let niced;
+    if (m <= 1) niced = 1;
+    else if (m <= 2) niced = 2;
+    else if (m <= 2.5) niced = 2.5;
+    else if (m <= 5) niced = 5;
+    else niced = 10;
+    return niced * p;
+  }
+  function percentile(arr, p) {
+    if (arr.length === 0) return 0;
+    const a = arr.slice().sort((x, y) => x - y);
+    const i = Math.min(a.length - 1, Math.floor(p * a.length));
+    return a[i];
+  }
+  function updateFDAxes() {
+    const recent = chartData.fd.slice(-800);
+    const targetK = Math.max(40, niceCeil(percentile(recent.map(p => p.k), 0.98) * 1.15));
+    const targetQ = Math.max(600, niceCeil(percentile(recent.map(p => p.q), 0.98) * 1.15));
+    const ease = (cur, tgt) => (tgt > cur * 1.2 ? tgt : cur + 0.08 * (tgt - cur));
+    fdAxes.maxK = ease(fdAxes.maxK, targetK);
+    fdAxes.maxQ = ease(fdAxes.maxQ, targetQ);
+  }
+
   function drawFD() {
     const w = cFD.width, h = cFD.height;
-    // dynamic y-scale from current data, plus theoretical max guidance
-    const maxK = params.fdMaxK;
-    const maxQ = params.fdMaxQ;
+    updateFDAxes();
+    const maxK = fdAxes.maxK;
+    const maxQ = fdAxes.maxQ;
     drawAxes(xFD, w, h, maxQ);
 
     const x0 = 30, plotW = w - x0 - 6;
@@ -722,8 +750,6 @@
   bindRange("dtStep", "dtStep", (v) => v.toFixed(2));
   bindRange("regionCenter", "regionCenter", (v) => String(v | 0) + "°");
   bindRange("regionSpan", "regionSpan", (v) => String(v | 0) + "°");
-  bindRange("fdMaxK", "fdMaxK", (v) => String(v | 0));
-  bindRange("fdMaxQ", "fdMaxQ", (v) => String(v | 0));
   bindRange("gpSigma", "gpSigma", (v) => v.toFixed(2));
   bindRange("gpEll", "gpEll", (v) => v.toFixed(1));
 
