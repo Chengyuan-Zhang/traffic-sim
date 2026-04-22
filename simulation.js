@@ -202,6 +202,23 @@
       c.s = (c.s + c.v * dt) % L;
       if (c.s < 0) c.s += L;
     }
+
+    // Hard clamp: physically prevent overlap. Even with noise or large dt,
+    // bumper-to-bumper gap must stay >= s0. If a follower has caught up,
+    // pull it back to lead.s - carLength - s0 and drop its speed to match.
+    const minGap = params.s0;
+    for (let i = 0; i < n; i++) {
+      const me = cars[i];
+      const lead = cars[(i + 1) % n];
+      let gap = lead.s - me.s - params.carLength;
+      if (gap < 0) gap += L;
+      if (gap < minGap) {
+        let target = lead.s - params.carLength - minGap;
+        if (target < 0) target += L;
+        me.s = target;
+        if (me.v > lead.v) me.v = lead.v;
+      }
+    }
     simTime += dt;
   }
 
@@ -691,6 +708,7 @@
   bindRange("numCars", "numCars", (v) => String(v | 0));
   bindRange("v0", "v0");
   bindRange("T", "T", (v) => v.toFixed(1));
+  bindRange("s0", "s0", (v) => v.toFixed(1));
   bindRange("a", "a", (v) => v.toFixed(1));
   bindRange("b", "b", (v) => v.toFixed(1));
   bindRange("radius", "radius");
