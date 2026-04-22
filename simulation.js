@@ -15,7 +15,51 @@
     carLength: 4.5,
     radius: 120,   // meters
     speedMul: 1.0,
+    // MA-IDM GP noise (arXiv:2210.03571)
+    gpSigma: 0.0,  // output scale (m/s^2); 0 disables noise
+    gpEll: 2.0,    // lengthscale (s)
   };
+
+  // Random Fourier Features for a zero-mean GP with RBF kernel
+  //   k(t,t') = sigma^2 * exp(-(t-t')^2 / (2*ell^2))
+  // Approximated by  eps(t) = sigma * sqrt(2/M) * sum_m cos(w_m * t + b_m),
+  //   with w_m ~ N(0, 1/ell^2), b_m ~ U(0, 2*pi).
+  // This gives a stationary process with the RBF kernel (Bochner's theorem).
+  const GP_M = 32;
+  let simTime = 0;  // shared continuous clock fed to the GP
+
+  function randn() {
+    // Box-Muller
+    let u = 0, v = 0;
+    while (u === 0) u = Math.random();
+    while (v === 0) v = Math.random();
+    return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+  }
+
+  function sampleGPFeatures(ell) {
+    const inv = 1 / Math.max(0.01, ell);
+    const omegas = new Float32Array(GP_M);
+    const phases = new Float32Array(GP_M);
+    for (let m = 0; m < GP_M; m++) {
+      omegas[m] = randn() * inv;
+      phases[m] = Math.random() * 2 * Math.PI;
+    }
+    return { omegas, phases };
+  }
+
+  function gpNoise(car) {
+    // sigma * sqrt(2/M) * sum cos(w_m * t + b_m)
+    let s = 0;
+    const om = car.gp.omegas, ph = car.gp.phases;
+    for (let m = 0; m < GP_M; m++) {
+      s += Math.cos(om[m] * simTime + ph[m]);
+    }
+    return params.gpSigma * Math.sqrt(2 / GP_M) * s;
+  }
+
+  function resampleAllGP() {
+    for (const c of cars) c.gp = sampleGPFeatures(params.gpEll);
+  }
 
   let cars = [];        // {s: position along ring (m), v: speed (m/s), color, perturb?}
   let paused = false;
@@ -40,8 +84,10 @@
         v: params.v0 * 0.8,
         color: colorFor(i, n),
         perturbUntil: 0,
+        gp: sampleGPFeatures(params.gpEll),
       });
     }
+    simTime = 0;
   }
 
   // ---------- IDM ----------
@@ -66,6 +112,9 @@
       if (gap < 0) gap += L;
       let acc = idmAccel(me.v, lead.v, gap);
 
+      // MA-IDM: add temporally-correlated GP noise to acceleration
+      if (params.gpSigma > 0) acc += gpNoise(me);
+
       if (me.perturbUntil > 0) {
         acc = Math.min(acc, -4.0);
         me.perturbUntil -= dt;
@@ -79,6 +128,7 @@
       c.s = (c.s + c.v * dt) % L;
       if (c.s < 0) c.s += L;
     }
+    simTime += dt;
   }
 
   // ---------- rendering ----------
@@ -485,6 +535,11 @@
   bindRange("b", "b", (v) => v.toFixed(1));
   bindRange("radius", "radius");
   bindRange("speedMul", "speedMul", (v) => v.toFixed(2) + "×");
+  bindRange("gpSigma", "gpSigma", (v) => v.toFixed(2));
+  bindRange("gpEll", "gpEll", (v) => v.toFixed(1));
+
+  // Changing lengthscale requires resampling frequencies
+  document.getElementById("gpEll").addEventListener("change", resampleAllGP);
 
   // numCars & radius need reinit
   document.getElementById("numCars").addEventListener("change", initCars);

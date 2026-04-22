@@ -13,6 +13,8 @@
       Cars drive around a circular track using the Intelligent Driver Model (IDM).
       Even without obstacles, small perturbations grow into stop-and-go waves —
       the classic <a href="https://en.wikipedia.org/wiki/Traffic_flow#Sugiyama_experiment" target="_blank" rel="noopener">Sugiyama experiment</a>.
+      Enable the <strong>GP noise</strong> slider to add temporally-correlated driver noise
+      (<a href="https://arxiv.org/abs/2210.03571" target="_blank" rel="noopener">MA-IDM, Zhang &amp; Sun 2024</a>).
     </p>
   </header>
 
@@ -55,6 +57,21 @@
       <div class="control">
         <label for="speedMul">Sim speed: <span id="speedMulVal">1.0×</span></label>
         <input type="range" id="speedMul" min="0.25" max="4" value="1" step="0.25" />
+      </div>
+
+      <div class="gp-group">
+        <div class="gp-title">
+          GP noise (MA-IDM)
+          <a href="https://arxiv.org/abs/2210.03571" target="_blank" rel="noopener" title="Zhang &amp; Sun, 2024">?</a>
+        </div>
+        <div class="control">
+          <label for="gpSigma">σ — noise scale (m/s²): <span id="gpSigmaVal">0.0</span></label>
+          <input type="range" id="gpSigma" min="0" max="1.0" value="0.0" step="0.05" />
+        </div>
+        <div class="control">
+          <label for="gpEll">ℓ — lengthscale (s): <span id="gpEllVal">2.0</span></label>
+          <input type="range" id="gpEll" min="0.1" max="10" value="2.0" step="0.1" />
+        </div>
       </div>
 
       <div class="buttons">
