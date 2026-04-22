@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Ring-Road Traffic Simulation</title>
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header>
+    <h1>Ring-Road Traffic Simulation</h1>
+    <p class="subtitle">
+      Cars drive around a circular track using the Intelligent Driver Model (IDM).
+      Even without obstacles, small perturbations grow into stop-and-go waves —
+      the classic <a href="https://en.wikipedia.org/wiki/Traffic_flow#Sugiyama_experiment" target="_blank" rel="noopener">Sugiyama experiment</a>.
+    </p>
+  </header>
+
+  <main>
+    <div class="stage">
+      <canvas id="road" width="720" height="720" aria-label="Ring road simulation"></canvas>
+    </div>
+
+    <aside class="controls">
+      <div class="control">
+        <label for="numCars">Number of cars: <span id="numCarsVal">30</span></label>
+        <input type="range" id="numCars" min="5" max="80" value="30" />
+      </div>
+
+      <div class="control">
+        <label for="v0">Desired speed v₀ (m/s): <span id="v0Val">20</span></label>
+        <input type="range" id="v0" min="5" max="40" value="20" step="1" />
+      </div>
+
+      <div class="control">
+        <label for="T">Safe time headway T (s): <span id="TVal">1.5</span></label>
+        <input type="range" id="T" min="0.3" max="3.0" value="1.5" step="0.1" />
+      </div>
+
+      <div class="control">
+        <label for="a">Max acceleration a (m/s²): <span id="aVal">1.0</span></label>
+        <input type="range" id="a" min="0.2" max="3.0" value="1.0" step="0.1" />
+      </div>
+
+      <div class="control">
+        <label for="b">Comfortable braking b (m/s²): <span id="bVal">2.0</span></label>
+        <input type="range" id="b" min="0.5" max="5.0" value="2.0" step="0.1" />
+      </div>
+
+      <div class="control">
+        <label for="radius">Ring radius (m): <span id="radiusVal">120</span></label>
+        <input type="range" id="radius" min="60" max="250" value="120" step="5" />
+      </div>
+
+      <div class="control">
+        <label for="speedMul">Sim speed: <span id="speedMulVal">1.0×</span></label>
+        <input type="range" id="speedMul" min="0.25" max="4" value="1" step="0.25" />
+      </div>
+
+      <div class="buttons">
+        <button id="perturb" type="button">Perturb (brake one car)</button>
+        <button id="reset" type="button">Reset</button>
+        <button id="pause" type="button">Pause</button>
+      </div>
+
+      <div class="stats">
+        <div><span>Avg speed:</span> <strong id="statAvg">0.0</strong> m/s</div>
+        <div><span>Min speed:</span> <strong id="statMin">0.0</strong> m/s</div>
+        <div><span>Density:</span> <strong id="statDens">0.0</strong> cars/km</div>
+        <div><span>Flow:</span> <strong id="statFlow">0</strong> cars/hr</div>
+      </div>
+    </aside>
+  </main>
+
+  <footer>
+    <p>Source on <a href="https://github.com/Chengyuan-Zhang/traffic-sim" target="_blank" rel="noopener">GitHub</a>.</p>
+  </footer>
+
+  <script src="simulation.js"></script>
+</body>
+</html>
