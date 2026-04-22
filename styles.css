@@ -259,3 +259,47 @@ footer a { color: var(--accent); }
   color: rgba(230,237,243,0.55);
   margin-top: 4px;
 }
+
+.about {
+  margin: 24px auto 12px;
+  max-width: 1200px;
+  padding: 0 16px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+.about-card {
+  background: var(--panel);
+  border: 1px solid #2a3645;
+  border-radius: 10px;
+  padding: 16px 20px;
+}
+.about-card h2 {
+  margin: 0 0 10px 0;
+  font-size: 1.05rem;
+  color: var(--accent-2);
+}
+.about-card p { margin: 6px 0; font-size: 0.92rem; line-height: 1.5; }
+.about-card a { color: var(--accent); }
+.contact-links { font-size: 0.88rem; }
+.refs { padding-left: 20px; font-size: 0.88rem; line-height: 1.55; }
+.refs li { margin-bottom: 8px; }
+.about-card details { margin-top: 8px; }
+.about-card summary {
+  cursor: pointer;
+  font-size: 0.88rem;
+  color: var(--accent-2);
+  padding: 4px 0;
+}
+.about-card pre {
+  background: var(--panel-2);
+  border: 1px solid #2a3645;
+  border-radius: 6px;
+  padding: 10px 12px;
+  font-size: 0.78rem;
+  overflow-x: auto;
+  white-space: pre;
+}
+@media (max-width: 800px) {
+  .about { grid-template-columns: 1fr; }
+}
