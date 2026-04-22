@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Compare noise models — traffic-sim</title>
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <nav class="topnav">
+    <a class="topnav-brand" href="index.html">🚗 traffic-sim</a>
+    <div class="topnav-links">
+      <a class="topnav-link" href="index.html">Simulator</a>
+      <a class="topnav-link active" href="compare.html">Compare models</a>
+      <a class="topnav-link" href="https://github.com/Chengyuan-Zhang/traffic-sim" target="_blank" rel="noopener">GitHub</a>
+    </div>
+  </nav>
+
+  <header>
+    <h1>How does noise change car-following?</h1>
+    <p class="subtitle">
+      Three ring roads run side-by-side with <em>identical IDM parameters and initial
+      conditions</em>. The only difference is the driver-noise model on the acceleration
+      residual <code>η(t)</code>:
+      <strong style="color:#ff7675">white noise (B-IDM)</strong>,
+      <strong style="color:#74b9ff">AR(p) (DR-IDM)</strong>,
+      <strong style="color:#55efc4">Gaussian process (MA-IDM)</strong>.
+      The autocorrelation of <code>η(t)</code>, the fundamental diagram, and summary
+      metrics reveal the qualitative differences — persistent waves and FD hysteresis
+      under correlated noise, fine jitter under white noise.
+    </p>
+  </header>
+
+  <aside class="cmp-controls">
+    <div class="control">
+      <label for="cmpN">Cars per ring: <span id="cmpNVal">30</span></label>
+      <input type="range" id="cmpN" min="10" max="60" value="30" step="1" />
+    </div>
+    <div class="control">
+      <label for="cmpRadius">Ring radius (m): <span id="cmpRadiusVal">120</span></label>
+      <input type="range" id="cmpRadius" min="60" max="250" value="120" step="5" />
+    </div>
+    <div class="control">
+      <label for="cmpSigma">σ — noise scale (m/s²): <span id="cmpSigmaVal">0.30</span></label>
+      <input type="range" id="cmpSigma" min="0" max="1.0" value="0.30" step="0.05" />
+    </div>
+    <div class="control">
+      <label for="cmpEll">ℓ — GP lengthscale (s): <span id="cmpEllVal">1.4</span></label>
+      <input type="range" id="cmpEll" min="0.1" max="5.0" value="1.4" step="0.1" />
+    </div>
+    <div class="control">
+      <label for="cmpKernel">GP kernel</label>
+      <select id="cmpKernel">
+        <option value="rbf" selected>RBF</option>
+        <option value="matern52">Matérn-5/2</option>
+        <option value="matern32">Matérn-3/2</option>
+        <option value="matern12">Matérn-1/2 (OU)</option>
+      </select>
+    </div>
+    <div class="control">
+      <label for="cmpAR">AR order p</label>
+      <select id="cmpAR">
+        <option value="1">p = 1</option>
+        <option value="2" selected>p = 2</option>
+        <option value="3">p = 3</option>
+        <option value="4">p = 4</option>
+        <option value="5">p = 5</option>
+        <option value="6">p = 6</option>
+        <option value="7">p = 7</option>
+      </select>
+    </div>
+    <div class="control">
+      <label for="cmpSpeed">Sim speed: <span id="cmpSpeedVal">2×</span></label>
+      <input type="range" id="cmpSpeed" min="0.5" max="10" value="2" step="0.5" />
+    </div>
+    <div class="buttons">
+      <button id="cmpPerturb" type="button">Perturb all</button>
+      <button id="cmpReset" type="button">Reset</button>
+      <button id="cmpPause" type="button">Pause</button>
+    </div>
+    <p class="hint">
+      All three rings start from the same initial state. Only the realization of
+      <code>η(t)</code> differs.
+    </p>
+  </aside>
+
+  <section class="cmp-rings">
+    <div class="cmp-ring">
+      <div class="cmp-label" style="color:#ff7675">White noise &mdash; B-IDM</div>
+      <canvas id="ring-white" width="340" height="340"></canvas>
+      <div class="cmp-stats"><span>v̄</span><strong id="avg-white">–</strong><span>m/s</span></div>
+    </div>
+    <div class="cmp-ring">
+      <div class="cmp-label" style="color:#74b9ff">AR(p) &mdash; DR-IDM</div>
+      <canvas id="ring-ar" width="340" height="340"></canvas>
+      <div class="cmp-stats"><span>v̄</span><strong id="avg-ar">–</strong><span>m/s</span></div>
+    </div>
+    <div class="cmp-ring">
+      <div class="cmp-label" style="color:#55efc4">Gaussian process &mdash; MA-IDM</div>
+      <canvas id="ring-gp" width="340" height="340"></canvas>
+      <div class="cmp-stats"><span>v̄</span><strong id="avg-gp">–</strong><span>m/s</span></div>
+    </div>
+  </section>
+
+  <section class="cmp-charts">
+    <div class="chart-card">
+      <h3>Acceleration noise η(t) — one tagged car</h3>
+      <p class="chart-cap">
+        White noise looks like hash; AR is jagged but persistent; GP is smooth.
+      </p>
+      <canvas id="chartEta" width="900" height="220"></canvas>
+    </div>
+
+    <div class="chart-card">
+      <h3>Autocorrelation ACF(τ) of η(t)</h3>
+      <p class="chart-cap">
+        White noise: spike at τ=0, then within the ±2/√N band (grey).
+        AR / GP: slow decay — the <em>temporal correlation</em> that distinguishes
+        them from i.i.d. noise.
+      </p>
+      <canvas id="chartAcf" width="900" height="260"></canvas>
+    </div>
+
+    <div class="chart-card">
+      <h3>Fundamental diagram — flow vs density</h3>
+      <p class="chart-cap">
+        Correlated noise widens the scatter and tends to produce hysteresis around
+        the critical density.
+      </p>
+      <canvas id="chartFdCmp" width="900" height="320"></canvas>
+    </div>
+
+    <div class="chart-card">
+      <h3>Summary metrics</h3>
+      <table class="metrics-table">
+        <thead>
+          <tr>
+            <th>Metric</th>
+            <th style="color:#ff7675">White (B-IDM)</th>
+            <th style="color:#74b9ff">AR(p) (DR-IDM)</th>
+            <th style="color:#55efc4">GP (MA-IDM)</th>
+          </tr>
+        </thead>
+        <tbody id="metrics-body">
+          <tr><td>Empirical std of η(t) (m/s²)</td><td id="m-std-white">–</td><td id="m-std-ar">–</td><td id="m-std-gp">–</td></tr>
+          <tr><td>Lag-1 autocorrelation of η</td><td id="m-ac1-white">–</td><td id="m-ac1-ar">–</td><td id="m-ac1-gp">–</td></tr>
+          <tr><td>Effective correlation time (s)</td><td id="m-tau-white">–</td><td id="m-tau-ar">–</td><td id="m-tau-gp">–</td></tr>
+          <tr><td>Std. of avg ring speed (m/s)</td><td id="m-sv-white">–</td><td id="m-sv-ar">–</td><td id="m-sv-gp">–</td></tr>
+          <tr><td>% time with min speed &lt; 3 m/s</td><td id="m-jam-white">–</td><td id="m-jam-ar">–</td><td id="m-jam-gp">–</td></tr>
+        </tbody>
+      </table>
+      <p class="chart-cap">Metrics accumulate from reset; let the sim run ~60&nbsp;s for stable estimates.</p>
+    </div>
+  </section>
+
+  <footer>
+    <p>Source on <a href="https://github.com/Chengyuan-Zhang/traffic-sim" target="_blank" rel="noopener">GitHub</a>.</p>
+    <p class="tribute-small">
+      With gratitude to <strong>Dr. <a href="https://mtreiber.de/" target="_blank" rel="noopener">Martin Treiber</a></strong> —
+      inventor of the IDM and pioneer of stochastic car-following — whose research, and whose
+      interactive <a href="https://traffic-simulation.de/" target="_blank" rel="noopener">traffic-simulation.de</a>,
+      inspired this project.
+    </p>
+  </footer>
+
+  <script src="compare.js"></script>
+</body>
+</html>
