@@ -11,11 +11,25 @@
     carLength: 4.5,
     dtStep: 0.05,
     speedMul: 2.0,
-    sigma: 0.30,
+    // Dimensionless multiplier applied to each model's paper-calibrated sigma.
+    // noiseScale = 1.0 reproduces the posterior-mean values of Table 1 in
+    // arXiv:2307.03340 (AR & white) and arXiv:2210.03571 (GP). We default to 3x
+    // so dynamics are visible on a toy ring; set to 1 for paper fidelity.
+    noiseScale: 3.0,
     ell: 1.4,
     kernel: "rbf",
     arOrder: 2,
   };
+
+  // Posterior-mean sigmas from the calibration papers.
+  //  - SIGMA_WHITE : B-IDM marginal std of η  (Zhang, Wang & Sun 2024, Table 1)
+  //  - SIGMA_GP    : MA-IDM kernel output scale σ_k (Zhang & Sun 2024)
+  //  - SIGMA_AR[p] : AR(p) innovation std σ_η (Zhang, Wang & Sun 2024, Table 1)
+  // Note that SIGMA_AR values are innovation stds — the resulting process has a
+  // larger *marginal* std that depends on ρ. This is exactly the paper's design.
+  const SIGMA_WHITE = 0.240;
+  const SIGMA_GP    = 0.202;
+  const SIGMA_AR    = { 1: 0.019, 2: 0.019, 3: 0.017, 4: 0.016, 5: 0.016, 6: 0.015, 7: 0.014 };
 
   const MODES = [
     { id: "white", color: "#ff7675", canvasId: "ring-white" },
@@ -134,18 +148,20 @@
     let s = 0;
     const om = car.gp.om, ph = car.gp.ph;
     for (let m = 0; m < GP_M; m++) s += Math.cos(om[m] * simTime + ph[m]);
-    return params.sigma * Math.sqrt(2 / GP_M) * s;
+    const sigma = SIGMA_GP * params.noiseScale;
+    return sigma * Math.sqrt(2 / GP_M) * s;
   }
-  function whiteNoise() { return params.sigma * randn(); }
+  function whiteNoise() { return (SIGMA_WHITE * params.noiseScale) * randn(); }
   function arNoise(car, dt) {
     const rho = AR_COEFFS[params.arOrder] || AR_COEFFS[1];
     const p = rho.length;
+    const sigmaInnov = (SIGMA_AR[params.arOrder] || SIGMA_AR[1]) * params.noiseScale;
     if (!car.arHist || car.arHist.length !== p) car.arHist = new Array(p).fill(0);
     car.arAccum = (car.arAccum || 0) + dt;
     while (car.arAccum >= FRAME_DT) {
       let mean = 0;
       for (let k = 0; k < p; k++) mean += rho[k] * car.arHist[k];
-      const next = mean + params.sigma * randn();
+      const next = mean + sigmaInnov * randn();
       for (let k = p - 1; k > 0; k--) car.arHist[k] = car.arHist[k - 1];
       car.arHist[0] = next;
       car.arAccum -= FRAME_DT;
@@ -175,7 +191,7 @@
       if (gap < 0) gap += L;
       let acc = idmAccel(me.v, lead.v, gap);
       let eta = 0;
-      if (params.sigma > 0) {
+      if (params.noiseScale > 0) {
         if (sim.mode === "white") eta = whiteNoise();
         else if (sim.mode === "ar") eta = arNoise(me, dt);
         else eta = gpNoise(me, sim.simTime);
@@ -310,8 +326,10 @@
     const W = cEta.width, H = cEta.height;
     drawChartFrame(xEta, W, H, "time (s)", "η(t) (m/s²)");
     const window = 500;
-    // y-range: symmetric around 0, ~3σ
-    const yr = Math.max(0.1, 3 * params.sigma);
+    // y-range: symmetric around 0, large enough to fit the biggest of the three
+    // calibrated sigmas at the current scale multiplier.
+    const refSigma = Math.max(SIGMA_WHITE, SIGMA_GP, 1.0) * params.noiseScale;
+    const yr = Math.max(0.1, 3 * refSigma);
     const y0 = H / 2;
     const yScale = (H / 2 - 20) / yr;
     // zero line
@@ -547,7 +565,7 @@
   }
   bindRange("cmpN", "numCars");
   bindRange("cmpRadius", "radius");
-  bindRange("cmpSigma", "sigma", (v) => v.toFixed(2));
+  bindRange("cmpScale", "noiseScale", (v) => v.toFixed(1) + "×");
   bindRange("cmpEll", "ell", (v) => v.toFixed(1));
   bindRange("cmpSpeed", "speedMul", (v) => v + "×");
 

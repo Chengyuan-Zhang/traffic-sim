@@ -41,8 +41,8 @@
       <input type="range" id="cmpRadius" min="60" max="250" value="120" step="5" />
     </div>
     <div class="control">
-      <label for="cmpSigma">σ — noise scale (m/s²): <span id="cmpSigmaVal">0.30</span></label>
-      <input type="range" id="cmpSigma" min="0" max="1.0" value="0.30" step="0.05" />
+      <label for="cmpScale">Noise scale (× paper σ): <span id="cmpScaleVal">3.0×</span></label>
+      <input type="range" id="cmpScale" min="0" max="8" value="3.0" step="0.5" />
     </div>
     <div class="control">
       <label for="cmpEll">ℓ — GP lengthscale (s): <span id="cmpEllVal">1.4</span></label>
@@ -79,8 +79,16 @@
       <button id="cmpPause" type="button">Pause</button>
     </div>
     <p class="hint">
-      All three rings start from the same initial state. Only the realization of
-      <code>η(t)</code> differs.
+      All three rings start from the same initial state. Each mode uses its own
+      <strong>paper-calibrated σ</strong>; the slider multiplies them in lockstep.
+    </p>
+    <p class="hint" style="grid-column:1/-1;margin-top:-4px">
+      Posterior means (HighD, 5 fps):
+      <strong style="color:#ff7675">white σ<sub>η</sub> = 0.240 m/s²</strong> &nbsp;·&nbsp;
+      <strong style="color:#74b9ff">AR σ<sub>η</sub> (innovation) = 0.019 → 0.014 m/s²</strong> for p = 1…7 &nbsp;·&nbsp;
+      <strong style="color:#55efc4">GP σ<sub>k</sub> = 0.202 m/s²</strong>, ℓ = 1.44 s.
+      Source: Table 1 of <a href="https://arxiv.org/abs/2307.03340" target="_blank" rel="noopener">Zhang, Wang &amp; Sun (2024)</a>
+      and <a href="https://arxiv.org/abs/2210.03571" target="_blank" rel="noopener">Zhang &amp; Sun (2024)</a>.
     </p>
   </aside>
 
