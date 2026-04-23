@@ -47,4 +47,7 @@
       }, 1600);
     });
   }
+  // ---------- Page view counter (visitorbadge.io — free, no signup) ----------
+  // We embed a plain <img> with the SVG badge at build-time now; nothing for JS
+  // to do. (Kept as a no-op placeholder in case we later want a JSON counter.)
 })();

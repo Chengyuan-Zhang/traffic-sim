@@ -271,6 +271,16 @@ footer a { color: var(--accent); }
   margin-top: 4px;
 }
 
+.view-counter {
+  margin-top: 10px;
+  line-height: 0;
+}
+.view-counter img {
+  height: 20px;
+  vertical-align: middle;
+  border-radius: 3px;
+}
+
 .about {
   margin: 24px auto 12px;
   max-width: 1200px;
