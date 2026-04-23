@@ -91,14 +91,17 @@
       <input type="range" id="cmpSpeed" min="0.5" max="10" value="5" step="0.5" />
     </div>
     <div class="buttons">
+      <button id="cmpPause" type="button">Pause</button>
       <button id="cmpPerturb" type="button">Perturb all</button>
       <button id="cmpReset" type="button">Reset</button>
-      <button id="cmpPause" type="button">Pause</button>
       <button id="cmpCopyLink" type="button" title="Copy a URL that reproduces the current parameters">Copy link</button>
     </div>
     <p class="hint">
       All three rings start from the same initial state. Each mode uses its own
       <strong>paper-calibrated σ</strong>; the slider multiplies them in lockstep.
+    </p>
+    <p class="hint kbd-legend" style="grid-column:1/-1;margin-top:2px" aria-label="Keyboard shortcuts">
+      <kbd>Space</kbd> pause · <kbd>P</kbd> perturb all · <kbd>R</kbd> reset
     </p>
     <p class="hint" style="grid-column:1/-1;margin-top:-4px">
       Posterior means (HighD, 5 fps):
@@ -140,9 +143,8 @@
     <div class="chart-card">
       <h3>Autocorrelation ACF(τ) of η(t)</h3>
       <p class="chart-cap">
-        White noise: spike at τ=0, then within the ±2/√N band (grey).
-        AR / GP: slow decay — the <em>temporal correlation</em> that distinguishes
-        them from i.i.d. noise.
+        White noise: spike at τ=0, then within the ±2/√N band (grey dashed, 95% CI under i.i.d. noise).
+        AR / GP: slow decay — the <em>temporal correlation</em> that distinguishes them from white noise.
       </p>
       <canvas id="chartAcf" width="900" height="260"></canvas>
     </div>
@@ -191,7 +193,8 @@
     </p>
     <p class="view-counter">
       <img src="https://api.visitorbadge.io/api/combined?path=https%3A%2F%2Fchengyuan-zhang.github.io%2Ftraffic-sim%2Fcompare.html&label=page+views&labelColor=%231f2937&countColor=%234fc3f7&style=flat"
-           alt="Page view counter" loading="lazy" decoding="async" height="20" />
+           alt="Page view counter" loading="lazy" decoding="async" height="20"
+           onerror="this.style.display='none'" />
     </p>
   </footer>
 

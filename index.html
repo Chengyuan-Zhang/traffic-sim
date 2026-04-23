@@ -38,6 +38,8 @@
       of <a href="https://mtreiber.de/" target="_blank" rel="noopener noreferrer">Martin Treiber</a> and co-authors.
       Even without obstacles, small perturbations grow into stop-and-go waves —
       the classic <a href="https://en.wikipedia.org/wiki/Traffic_flow#Sugiyama_experiment" target="_blank" rel="noopener noreferrer">Sugiyama experiment</a>.
+    </p>
+    <p class="subtitle">
       Enable the <strong>Driver noise</strong> slider to add stochastic acceleration error and compare
       three stochastic car-following models:
       <em>white noise (B-IDM)</em>,
@@ -46,6 +48,11 @@
       and an autoregressive process from
       <a href="https://arxiv.org/abs/2307.03340" target="_blank" rel="noopener noreferrer">Zhang, Wang &amp; Sun (2024), dynamic-regression IDM</a>.
     </p>
+    <div class="speed-legend" role="img" aria-label="Car-speed colour legend from 0 to v-nought metres per second (viridis colormap)">
+      <span class="speed-legend-label">slow</span>
+      <span class="speed-legend-bar" aria-hidden="true"></span>
+      <span class="speed-legend-label">fast (v₀)</span>
+    </div>
   </header>
 
   <main>
@@ -60,69 +67,87 @@
     </div>
 
     <aside class="controls">
-      <div class="control">
-        <label for="numCars">Number of cars: <span id="numCarsVal">30</span></label>
-        <input type="range" id="numCars" min="5" max="80" value="30" />
-      </div>
+      <details class="ctrl-group" open>
+        <summary>Scenario</summary>
+        <div class="control">
+          <label for="numCars">Number of cars: <span id="numCarsVal">30</span></label>
+          <input type="range" id="numCars" min="5" max="80" value="30"
+                 title="Total vehicles on the ring. Higher density → easier jam formation." />
+        </div>
 
-      <div class="control">
-        <label for="v0">Desired speed v₀ (m/s): <span id="v0Val">33</span></label>
-        <input type="range" id="v0" min="5" max="40" value="33" step="1" />
-      </div>
+        <div class="control">
+          <label for="radius">Ring radius (m): <span id="radiusVal">120</span></label>
+          <input type="range" id="radius" min="60" max="250" value="120" step="5"
+                 title="Radius of the circular track. Larger ring = longer effective road (circumference = 2πr)." />
+        </div>
 
-      <div class="control">
-        <label for="T">Safe time headway T (s): <span id="TVal">1.5</span></label>
-        <input type="range" id="T" min="0.3" max="3.0" value="1.5" step="0.1" />
-      </div>
+        <div class="control">
+          <label for="speedMul">Sim speed: <span id="speedMulVal">1.0×</span></label>
+          <input type="range" id="speedMul" min="0.25" max="10" value="1" step="0.25"
+                 title="Playback multiplier. 1× = real time; 10× is useful to let jam waves develop quickly." />
+        </div>
 
-      <div class="control">
-        <label for="s0">Min. gap s₀ (m): <span id="s0Val">2.0</span></label>
-        <input type="range" id="s0" min="0.5" max="10.0" value="2.0" step="0.1" />
-      </div>
+        <div class="control">
+          <label for="dtStep">Integration step Δt (s): <span id="dtStepVal">0.05</span></label>
+          <input type="range" id="dtStep" min="0.02" max="2.0" value="0.05" step="0.02"
+                 title="Physics time-step. Smaller = more accurate; IDM is typically stable for Δt ≤ 0.1 s." />
+        </div>
+      </details>
 
-      <div class="control">
-        <label for="a">Max acceleration a (m/s²): <span id="aVal">1.2</span></label>
-        <input type="range" id="a" min="0.2" max="3.0" value="1.2" step="0.1" />
-      </div>
+      <details class="ctrl-group">
+        <summary>IDM parameters</summary>
+        <div class="control">
+          <label for="v0">Desired speed v₀ (m/s): <span id="v0Val">33</span></label>
+          <input type="range" id="v0" min="5" max="40" value="33" step="1"
+                 title="Free-flow target speed each driver would adopt on an empty road." />
+        </div>
 
-      <div class="control">
-        <label for="b">Comfortable braking b (m/s²): <span id="bVal">1.5</span></label>
-        <input type="range" id="b" min="0.5" max="5.0" value="1.5" step="0.1" />
-      </div>
+        <div class="control">
+          <label for="T">Safe time headway T (s): <span id="TVal">1.5</span></label>
+          <input type="range" id="T" min="0.3" max="3.0" value="1.5" step="0.1"
+                 title="Desired temporal gap to the leader. Typical values 1.0–1.8 s." />
+        </div>
 
-      <div class="control">
-        <label for="radius">Ring radius (m): <span id="radiusVal">120</span></label>
-        <input type="range" id="radius" min="60" max="250" value="120" step="5" />
-      </div>
+        <div class="control">
+          <label for="s0">Min. gap s₀ (m): <span id="s0Val">2.0</span></label>
+          <input type="range" id="s0" min="0.5" max="10.0" value="2.0" step="0.1"
+                 title="Bumper-to-bumper minimum jam spacing." />
+        </div>
 
-      <div class="control">
-        <label for="speedMul">Sim speed: <span id="speedMulVal">1.0×</span></label>
-        <input type="range" id="speedMul" min="0.25" max="10" value="1" step="0.25" />
-      </div>
+        <div class="control">
+          <label for="a">Max acceleration a (m/s²): <span id="aVal">1.2</span></label>
+          <input type="range" id="a" min="0.2" max="3.0" value="1.2" step="0.1"
+                 title="Maximum comfortable acceleration when accelerating to v₀." />
+        </div>
 
-      <div class="control">
-        <label for="dtStep">Integration step Δt (s): <span id="dtStepVal">0.05</span></label>
-        <input type="range" id="dtStep" min="0.02" max="2.0" value="0.05" step="0.02" />
-      </div>
+        <div class="control">
+          <label for="b">Comfortable braking b (m/s²): <span id="bVal">1.5</span></label>
+          <input type="range" id="b" min="0.5" max="5.0" value="1.5" step="0.1"
+                 title="Comfortable deceleration target. IDM brakes harder when collision is imminent." />
+        </div>
+      </details>
 
-      <div class="gp-group">
-        <div class="gp-title">Measuring region (density / flow / FD)</div>
+      <details class="ctrl-group gp-group">
+        <summary>Measuring region (density / flow / FD)</summary>
         <div class="hint">Tip: click or drag on the ring to place the region center.</div>
         <div class="control">
           <label for="regionCenter">Center angle (°, 0 = top, CW): <span id="regionCenterVal">0</span></label>
-          <input type="range" id="regionCenter" min="0" max="359" value="0" step="1" />
+          <input type="range" id="regionCenter" min="0" max="359" value="0" step="1"
+                 title="Angular position of the measurement arc (0° = top, 90° = right, 180° = bottom)." />
         </div>
         <div class="control">
           <label for="regionSpan">Arc span (°): <span id="regionSpanVal">90</span></label>
-          <input type="range" id="regionSpan" min="10" max="360" value="90" step="5" />
+          <input type="range" id="regionSpan" min="10" max="360" value="90" step="5"
+                 title="Angular width of the measurement arc. Sub-bins within this arc feed the fundamental diagram." />
         </div>
-      </div>
+      </details>
 
-      <div class="gp-group">
-        <div class="gp-title">Driver noise (stochastic car-following)</div>
+      <details class="ctrl-group gp-group" open>
+        <summary>Driver noise (stochastic car-following)</summary>
         <div class="control">
           <label for="noiseMode">Noise model</label>
-          <select id="noiseMode">
+          <select id="noiseMode"
+                  title="Stochastic error model applied to the IDM acceleration.">
             <option value="gp" selected>Gaussian process (MA-IDM)</option>
             <option value="ar">AR(p) — dynamic regression</option>
             <option value="white">White noise (B-IDM)</option>
@@ -134,11 +159,13 @@
         </div>
         <div class="control">
           <label for="gpSigma">σ — noise scale (m/s²): <span id="gpSigmaVal">0.20</span></label>
-          <input type="range" id="gpSigma" min="0" max="1.0" value="0.20" step="0.05" />
+          <input type="range" id="gpSigma" min="0" max="1.0" value="0.20" step="0.05"
+                 title="Noise amplitude on the IDM acceleration residual η(t)." />
         </div>
         <div class="control" id="kernelRow">
           <label for="gpKernel">Kernel</label>
-          <select id="gpKernel">
+          <select id="gpKernel"
+                  title="GP covariance kernel. Matérn-1/2 is the roughest (exponential / OU), RBF is the smoothest.">
             <option value="rbf" selected>RBF (squared-exponential)</option>
             <option value="matern52">Matérn-5/2</option>
             <option value="matern32">Matérn-3/2</option>
@@ -147,11 +174,13 @@
         </div>
         <div class="control" id="ellRow">
           <label for="gpEll">ℓ — lengthscale (s): <span id="gpEllVal">1.4</span></label>
-          <input type="range" id="gpEll" min="0.1" max="5.0" value="1.4" step="0.1" />
+          <input type="range" id="gpEll" min="0.1" max="5.0" value="1.4" step="0.1"
+                 title="Temporal lengthscale of the GP kernel: roughly how long noise stays correlated." />
         </div>
         <div class="control" id="arRow">
           <label for="arOrder">AR order p (paper coefficients): <span id="arOrderVal">2</span></label>
-          <select id="arOrder">
+          <select id="arOrder"
+                  title="AR(p) order; coefficients ρ are the posterior means from Zhang et al. (2024) Table 1.">
             <option value="1">p = 1   ρ = [0.989]</option>
             <option value="2" selected>p = 2   ρ = [1.234, −0.247]</option>
             <option value="3">p = 3   ρ = [1.123, 0.425, −0.572]</option>
@@ -161,21 +190,25 @@
             <option value="7">p = 7   ρ = [0.866, 0.690, −0.001, −0.413, −0.378, −0.032, 0.248]</option>
           </select>
         </div>
-      </div>
+      </details>
 
       <div class="buttons">
+        <button id="pause" type="button">Pause</button>
         <button id="perturb" type="button">Perturb (brake one car)</button>
         <button id="reset" type="button">Reset</button>
-        <button id="pause" type="button">Pause</button>
         <button id="copyLink" type="button" title="Copy a URL that reproduces the current parameters">Copy link</button>
       </div>
 
       <div class="stats">
-        <div><span>Avg speed:</span> <strong id="statAvg">0.0</strong> m/s</div>
-        <div><span>Min speed:</span> <strong id="statMin">0.0</strong> m/s</div>
-        <div><span>Density:</span> <strong id="statDens">0.0</strong> cars/km</div>
-        <div><span>Flow:</span> <strong id="statFlow">0</strong> cars/hr</div>
+        <div><span>Avg speed <em class="scope">(ring)</em>:</span> <strong id="statAvg">0.0</strong> m/s</div>
+        <div><span>Min speed <em class="scope">(ring)</em>:</span> <strong id="statMin">0.0</strong> m/s</div>
+        <div><span>Density <em class="scope">(region)</em>:</span> <strong id="statDens">0.0</strong> cars/km</div>
+        <div><span>Flow <em class="scope">(region)</em>:</span> <strong id="statFlow">0</strong> cars/hr</div>
       </div>
+
+      <p class="kbd-legend" aria-label="Keyboard shortcuts">
+        <kbd>Space</kbd> pause · <kbd>P</kbd> perturb · <kbd>R</kbd> reset
+      </p>
     </aside>
   </main>
 
@@ -197,7 +230,13 @@
       <canvas id="chartFD" width="600" height="240"></canvas>
     </div>
     <div class="chart-card chart-wide">
-      <h3>Time–space diagram <span class="unit">(time →, position ↑; dark = jam)</span></h3>
+      <h3>Time–space diagram <span class="unit">(time →, position ↑; colour = local speed)</span></h3>
+      <div class="speed-legend speed-legend-inline" role="img" aria-label="Speed colour legend for the time-space diagram">
+        <span class="speed-legend-label">stopped</span>
+        <span class="speed-legend-bar" aria-hidden="true"></span>
+        <span class="speed-legend-label">free-flow</span>
+        <span class="speed-legend-note">Orange band = measuring region.</span>
+      </div>
       <canvas id="chartST" width="900" height="220"></canvas>
     </div>
   </section>
@@ -291,7 +330,8 @@
     </p>
     <p class="view-counter">
       <img src="https://api.visitorbadge.io/api/combined?path=https%3A%2F%2Fchengyuan-zhang.github.io%2Ftraffic-sim%2F&label=page+views&labelColor=%231f2937&countColor=%234fc3f7&style=flat"
-           alt="Page view counter" loading="lazy" decoding="async" height="20" />
+           alt="Page view counter" loading="lazy" decoding="async" height="20"
+           onerror="this.style.display='none'" />
     </p>
   </footer>
 

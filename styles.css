@@ -28,29 +28,74 @@ header {
 
 header h1 {
   margin: 0 0 6px;
-  font-size: 1.6rem;
+  font-size: 2rem;
   letter-spacing: 0.3px;
 }
 
 .subtitle {
-  margin: 0 auto;
+  margin: 6px auto;
   max-width: 720px;
   color: var(--muted);
   font-size: 0.95rem;
-  line-height: 1.5;
+  line-height: 1.55;
 }
 
 .subtitle a { color: var(--accent); }
 
+/* Shared speed→colour legend bar (viridis), used below the header and above the
+   time-space diagram. Kept in sync with the VIRIDIS stops in simulation.js. */
+.speed-legend {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  justify-content: center;
+  margin: 14px auto 0;
+  max-width: 520px;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+.speed-legend.speed-legend-inline {
+  max-width: 100%;
+  justify-content: flex-start;
+  margin: 4px 0 8px;
+  padding: 0 4px;
+}
+.speed-legend-bar {
+  flex: 1;
+  display: inline-block;
+  height: 10px;
+  border-radius: 5px;
+  background: linear-gradient(
+    to right,
+    rgb(68,1,84) 0%,
+    rgb(59,82,139) 25%,
+    rgb(33,145,140) 50%,
+    rgb(94,201,98) 75%,
+    rgb(253,231,37) 100%);
+  min-width: 120px;
+}
+.speed-legend-label {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.speed-legend-note {
+  margin-left: auto;
+  color: rgba(230,237,243,0.45);
+  font-style: italic;
+}
+
 main {
   display: grid;
-  grid-template-columns: minmax(320px, 1fr) 320px;
+  grid-template-columns: minmax(320px, 1fr) 300px;
   gap: 20px;
   padding: 20px 24px;
   max-width: 1200px;
   margin: 0 auto;
 }
 
+@media (max-width: 1080px) {
+  main { grid-template-columns: minmax(320px, 1fr) 260px; gap: 16px; }
+}
 @media (max-width: 900px) {
   main { grid-template-columns: 1fr; }
 }
@@ -125,7 +170,7 @@ button {
 button:hover { background: #26384b; }
 button:active { transform: translateY(1px); }
 
-#perturb { border-color: var(--accent-2); color: var(--accent-2); }
+#pause { border-color: var(--accent); color: var(--accent); }
 
 .stats {
   margin-top: 8px;
@@ -140,6 +185,66 @@ button:active { transform: translateY(1px); }
 
 .stats span { color: var(--muted); }
 .stats strong { color: var(--accent); font-variant-numeric: tabular-nums; }
+.stats em.scope {
+  color: rgba(230,237,243,0.35);
+  font-style: normal;
+  font-size: 0.74rem;
+  margin-left: 2px;
+}
+
+/* Collapsible control groups (native <details>) — keeps the sidebar compact. */
+.ctrl-group {
+  background: var(--panel-2);
+  border-radius: 8px;
+  padding: 0 12px;
+  border: 1px solid rgba(255,255,255,0.04);
+}
+.ctrl-group > summary {
+  cursor: pointer;
+  padding: 10px 0;
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: var(--accent);
+  list-style: revert;
+  user-select: none;
+}
+.ctrl-group > summary:hover { color: #81d4fa; }
+.ctrl-group[open] > summary { border-bottom: 1px solid rgba(255,255,255,0.06); margin-bottom: 10px; }
+.ctrl-group > .control,
+.ctrl-group > .hint { margin: 8px 0; }
+.ctrl-group > .control:last-child { margin-bottom: 12px; }
+
+/* Keyboard-shortcut legend under the control sidebar */
+.kbd-legend {
+  margin: 6px 0 0;
+  color: rgba(230,237,243,0.55);
+  font-size: 0.78rem;
+  text-align: center;
+}
+.kbd-legend kbd {
+  display: inline-block;
+  padding: 1px 5px;
+  margin: 0 1px;
+  border: 1px solid rgba(255,255,255,0.18);
+  border-bottom-width: 2px;
+  border-radius: 3px;
+  background: rgba(255,255,255,0.05);
+  color: var(--text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.72rem;
+  line-height: 1;
+}
+
+/* Accessible focus ring — visible on dark backgrounds */
+input[type="range"]:focus-visible,
+select:focus-visible,
+button:focus-visible,
+summary:focus-visible,
+a:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
 
 footer {
   text-align: center;
@@ -204,6 +309,18 @@ footer a { color: var(--accent); }
   flex-direction: column;
   gap: 8px;
 }
+
+/* When a ctrl-group is also a gp-group, keep the collapsing <details> layout
+   but pick up the orange tint. */
+details.ctrl-group.gp-group {
+  display: block;
+  padding: 0 12px;
+  background: rgba(255,183,77,0.05);
+  border-color: rgba(255,183,77,0.25);
+  gap: 0;
+}
+details.ctrl-group.gp-group > summary { color: var(--accent-2); }
+details.ctrl-group.gp-group > summary:hover { color: #ffd180; }
 
 .gp-title {
   font-size: 0.85rem;
@@ -476,7 +593,6 @@ footer a { color: var(--accent); }
 .cmp-ring canvas {
   width: 100%;
   height: auto;
-  max-width: 320px;
   aspect-ratio: 1 / 1;
   display: block;
   margin: 0 auto;
@@ -534,6 +650,34 @@ footer a { color: var(--accent); }
 .metrics-table th { color: var(--muted); font-weight: 600; }
 .metrics-table td:first-child { text-align: left; color: var(--muted); }
 .metrics-table tbody tr:last-child td { border-bottom: none; }
+
+/* Each data cell now hosts an inline bar (width = raw / row-max * 100%) and
+   the numeric readout, for instant visual comparison across the 3 models. */
+.metrics-table tbody td:not(:first-child) {
+  position: relative;
+  text-align: right;
+  padding-right: 10px;
+  font-variant-numeric: tabular-nums;
+  min-width: 90px;
+}
+.metrics-table .mbar {
+  position: absolute;
+  left: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  height: 14px;
+  width: var(--w, 0%);
+  background: linear-gradient(to right, rgba(79,195,247,0.35), rgba(79,195,247,0.08));
+  border-left: 2px solid rgba(79,195,247,0.7);
+  border-radius: 2px;
+  pointer-events: none;
+  transition: width 0.25s ease-out;
+}
+.metrics-table .mnum {
+  position: relative;
+  z-index: 1;
+  color: var(--text);
+}
 
 @media (max-width: 1000px) {
   .cmp-charts { grid-template-columns: 1fr; }

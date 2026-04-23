@@ -26,6 +26,28 @@
     c.getContext("2d").setTransform(DPR, 0, 0, DPR, 0, 0);
   }
 
+  // ---------- Perceptually-uniform, color-blind-safe colormap (Viridis) ----------
+  // Five-stop sampling; linear-interpolated. Used for (1) car speed on the ring,
+  // (2) per-pixel speed in the time-space diagram. Matches the CSS gradient in
+  // index.html's `.speed-legend` bar so the legend reads the same as the map.
+  const VIRIDIS = [[68,1,84],[59,82,139],[33,145,140],[94,201,98],[253,231,37]];
+  function viridis(t) {
+    t = Math.max(0, Math.min(0.999, t || 0));
+    const idx = t * (VIRIDIS.length - 1);
+    const i = Math.floor(idx);
+    const f = idx - i;
+    const a = VIRIDIS[i], b = VIRIDIS[i + 1] || a;
+    return [
+      Math.round(a[0] + (b[0] - a[0]) * f),
+      Math.round(a[1] + (b[1] - a[1]) * f),
+      Math.round(a[2] + (b[2] - a[2]) * f),
+    ];
+  }
+  function viridisCss(t) {
+    const [r, g, b] = viridis(t);
+    return `rgb(${r},${g},${b})`;
+  }
+
   const canvas = document.getElementById("road");
   const ctx = canvas.getContext("2d");
 
@@ -332,6 +354,49 @@
     ctx.arc(cx, cy, rPix, 0, Math.PI * 2);
     ctx.stroke();
     ctx.setLineDash([]);
+
+    // Quadrant ticks — faint, outside the lane edge; 0°=top labelled boldly.
+    ctx.font = "11px -apple-system, Segoe UI, sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    const tickLabels = [
+      { deg: 0,   text: "0°",   bold: true  },
+      { deg: 90,  text: "90°",  bold: false },
+      { deg: 180, text: "180°", bold: false },
+      { deg: 270, text: "270°", bold: false },
+    ];
+    for (const t of tickLabels) {
+      const a = (t.deg / 180) * Math.PI - Math.PI / 2;
+      const r0 = rPix - laneHalfPix;
+      const r1 = rPix + laneHalfPix;
+      const rL = rPix + laneHalfPix + 16;
+      ctx.strokeStyle = t.bold ? "rgba(255,183,77,0.9)" : "rgba(230,237,243,0.3)";
+      ctx.lineWidth = t.bold ? 2 : 1;
+      ctx.beginPath();
+      ctx.moveTo(cx + r0 * Math.cos(a), cy + r0 * Math.sin(a));
+      ctx.lineTo(cx + r1 * Math.cos(a), cy + r1 * Math.sin(a));
+      ctx.stroke();
+      ctx.fillStyle = t.bold ? "#ffb74d" : "rgba(230,237,243,0.5)";
+      ctx.fillText(t.text, cx + rL * Math.cos(a), cy + rL * Math.sin(a));
+    }
+
+    // Direction-of-travel chevrons along the road (cars run clockwise: 0° → 90° → 180° → 270° → 0°).
+    ctx.strokeStyle = "rgba(230,237,243,0.35)";
+    ctx.lineWidth = 2;
+    ctx.lineCap = "round";
+    for (let k = 0; k < 8; k++) {
+      const a = (k / 8) * Math.PI * 2 - Math.PI / 2 + Math.PI / 8;
+      const bx = cx + rPix * Math.cos(a), by = cy + rPix * Math.sin(a);
+      const tx = -Math.sin(a), ty = Math.cos(a); // tangent, clockwise
+      const nx = Math.cos(a),  ny = Math.sin(a); // outward normal
+      const size = Math.min(7, laneHalfPix * 0.4);
+      ctx.beginPath();
+      ctx.moveTo(bx - tx * size + nx * size * 0.5, by - ty * size + ny * size * 0.5);
+      ctx.lineTo(bx + tx * size, by + ty * size);
+      ctx.lineTo(bx - tx * size - nx * size * 0.5, by - ty * size - ny * size * 0.5);
+      ctx.stroke();
+    }
+    ctx.lineCap = "butt";
     ctx.restore();
 
     // measuring region: highlight arc on the road
@@ -380,19 +445,36 @@
       ctx.translate(x, y);
       ctx.rotate(theta + Math.PI / 2);
 
-      // color by speed: interpolate from red (slow) to green (v0)
+      // Viridis colormap: dark (slow) → bright (fast). Color-blind-safe and
+      // perceptually uniform; matches the `.speed-legend` gradient above the ring.
       const ratio = Math.max(0, Math.min(1, c.v / params.v0));
-      const hue = Math.round(ratio * 120); // 0=red, 120=green
-      ctx.fillStyle = `hsl(${hue}, 80%, 55%)`;
+      ctx.fillStyle = viridisCss(ratio);
 
       const lenPix = Math.max(6, rPix * carLenRad);
-      ctx.fillRect(-carWidthPix / 2, -lenPix / 2, carWidthPix, lenPix);
+      const x0 = -carWidthPix / 2, y0 = -lenPix / 2;
+      // Rounded-rect body (roundRect is supported on all evergreen browsers).
+      ctx.beginPath();
+      if (ctx.roundRect) ctx.roundRect(x0, y0, carWidthPix, lenPix, Math.min(3, carWidthPix / 2));
+      else ctx.rect(x0, y0, carWidthPix, lenPix);
+      ctx.fill();
 
-      // perturbed highlight
+      // Leading-edge indicator (lighter stripe at the front of the car, so direction
+      // of travel is visible even for stopped cars).
+      ctx.fillStyle = "rgba(255,255,255,0.7)";
+      ctx.fillRect(x0, y0, carWidthPix, Math.max(1, lenPix * 0.18));
+
+      // Perturbed highlight: bright yellow outline + glow pulse while braking.
       if (c.perturbUntil > 0) {
+        const pulse = 0.5 + 0.5 * Math.sin(simTime * 10);
+        ctx.shadowColor = "rgba(255,235,59,0.9)";
+        ctx.shadowBlur = 6 + 6 * pulse;
         ctx.strokeStyle = "#ffeb3b";
-        ctx.lineWidth = 2;
-        ctx.strokeRect(-carWidthPix / 2, -lenPix / 2, carWidthPix, lenPix);
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        if (ctx.roundRect) ctx.roundRect(x0, y0, carWidthPix, lenPix, Math.min(3, carWidthPix / 2));
+        else ctx.rect(x0, y0, carWidthPix, lenPix);
+        ctx.stroke();
+        ctx.shadowBlur = 0;
       }
       ctx.restore();
     }
@@ -502,7 +584,9 @@
       const arr = chartData[k];
       if (arr.length > MAX_POINTS) arr.splice(0, arr.length - MAX_POINTS);
     }
-    // FD scatters are kept indefinitely (reset only via the Reset button)
+    // FD scatter: cap at 2000 so the per-frame polyline stays cheap on long runs.
+    const fd = chartData.fd;
+    if (fd.length > 2000) fd.splice(0, fd.length - 2000);
   }
 
   const cSpeed = document.getElementById("chartSpeed");
@@ -553,7 +637,7 @@
     return v.toFixed(1);
   }
 
-  function drawLineChart(canvas, cx, data, color, yMaxHint) {
+  function drawLineChart(canvas, cx, data, color, yMaxHint, opts) {
     const w = canvas._w || canvas.width, h = canvas._h || canvas.height;
     const yMax = Math.max(yMaxHint, ...(data.length ? data : [1])) * 1.1 || 1;
     drawAxes(cx, w, h, yMax);
@@ -579,6 +663,29 @@
     grad.addColorStop(1, color + "00");
     cx.fillStyle = grad;
     cx.fill();
+
+    // Time-axis labels at the left and right edges of the trace so the viewer
+    // knows the time span of the visible buffer (~ 60 s at 10 Hz update).
+    // opts.windowSec lets callers override the label; default MAX_POINTS / 10Hz.
+    const windowSec = (opts && opts.windowSec) || Math.round(MAX_POINTS / 10);
+    cx.fillStyle = "rgba(230,237,243,0.45)";
+    cx.font = "10px -apple-system, Segoe UI, sans-serif";
+    cx.textBaseline = "bottom";
+    cx.textAlign = "left";
+    cx.fillText(`t \u2212 ${windowSec} s`, x0 + 2, h - 2);
+    cx.textAlign = "right";
+    cx.fillText("now", w - 4, h - 2);
+
+    // Current-value readout pinned to the top-right of the plot.
+    const latest = data[data.length - 1];
+    if (Number.isFinite(latest)) {
+      cx.fillStyle = color;
+      cx.textAlign = "right";
+      cx.textBaseline = "top";
+      cx.font = "bold 12px -apple-system, Segoe UI, sans-serif";
+      const txt = latest >= 100 ? Math.round(latest).toString() : latest.toFixed(1);
+      cx.fillText(txt, w - 4, 2);
+    }
   }
 
   // Auto-scale FD axes to fit ALL points currently in the buffer, with a
@@ -597,10 +704,54 @@
     else niced = 10;
     return niced * p;
   }
+  // Cached IDM equilibrium curve for the FD overlay. We recompute only when
+  // an IDM parameter changes — not per frame. Capped at ρ_j (physical jam
+  // density), NOT extended to maxK with a fake zero-flow tail.
+  let fdEq = { key: "", pts: [] };
+  function computeEquilibriumCurve() {
+    const { v0, T, a, s0, delta, carLength } = params;
+    const key = `${v0}|${T}|${a}|${s0}|${delta}|${carLength}`;
+    if (fdEq.key === key) return fdEq.pts;
+    if (!(v0 > 0 && T > 0 && a > 0 && s0 >= 0 && delta > 0 && carLength > 0)) {
+      fdEq = { key, pts: [] };
+      return fdEq.pts;
+    }
+    // ρ_j: jam density (cars/km). Cannot pack closer than carLength + s0.
+    const rhoJamPerM = 1 / (carLength + s0);
+    const rhoJamPerKm = rhoJamPerM * 1000;
+    const N = 80;
+    const pts = [{ k: 0, q: 0 }]; // explicit origin
+    for (let i = 1; i <= N; i++) {
+      const rhoPerKm = (i / N) * rhoJamPerKm;
+      const rhoPerM = rhoPerKm / 1000;
+      const s = 1 / rhoPerM - carLength; // available spacing (m)
+      if (s <= s0) {
+        pts.push({ k: rhoPerKm, q: 0 });
+        continue;
+      }
+      // f(v) = 1 - (v/v0)^δ - ((s0 + v*T)/s)^2; strictly decreasing on [0, v0].
+      let lo = 0, hi = v0;
+      for (let b = 0; b < 40; b++) {
+        const m = 0.5 * (lo + hi);
+        const f = 1 - Math.pow(m / v0, delta) - Math.pow((s0 + m * T) / s, 2);
+        if (f > 0) lo = m; else hi = m;
+      }
+      const ve = 0.5 * (lo + hi);
+      pts.push({ k: rhoPerKm, q: rhoPerKm * ve * 3.6 });
+    }
+    fdEq = { key, pts };
+    return fdEq.pts;
+  }
+
   function updateFDAxes() {
     const pts = chartData.fd;
     let mk = 0, mq = 0;
     for (const p of pts) { if (p.k > mk) mk = p.k; if (p.q > mq) mq = p.q; }
+    // Include equilibrium curve extent so the reference curve is always visible.
+    for (const p of computeEquilibriumCurve()) {
+      if (p.k > mk) mk = p.k;
+      if (p.q > mq) mq = p.q;
+    }
     const targetK = Math.max(40, niceCeil(mk * 1.1));
     const targetQ = Math.max(600, niceCeil(mq * 1.1));
     // Grow instantly to show new extremes; shrink gently to avoid flicker.
@@ -616,26 +767,90 @@
     drawAxes(xFD, w, h, maxQ);
 
     const x0 = 30, plotW = w - x0 - 6;
-    // scatter: older points fade
-    const n = chartData.fd.length;
-    for (let i = 0; i < n; i++) {
-      const p = chartData.fd[i];
-      const x = x0 + (p.k / maxK) * plotW;
-      const y = h - (p.q / maxQ) * h;
-      xFD.fillStyle = "rgba(79,195,247,0.85)";
+    const kToX = (k) => x0 + (k / maxK) * plotW;
+    const qToY = (q) => h - (q / maxQ) * h;
+
+    // Equilibrium IDM curve: dashed reference overlay, drawn first so scatter
+    // sits on top of it.
+    const eq = computeEquilibriumCurve();
+    if (eq.length >= 2) {
+      xFD.save();
+      xFD.setLineDash([5, 4]);
+      xFD.strokeStyle = "rgba(230,237,243,0.55)";
+      xFD.lineWidth = 1.4;
       xFD.beginPath();
-      xFD.arc(x, y, 2.2, 0, Math.PI * 2);
+      for (let i = 0; i < eq.length; i++) {
+        const p = eq[i];
+        const x = kToX(p.k), y = qToY(p.q);
+        if (i === 0) xFD.moveTo(x, y); else xFD.lineTo(x, y);
+      }
+      xFD.stroke();
+      xFD.restore();
+      // Label at the peak
+      let peakIdx = 0;
+      for (let i = 1; i < eq.length; i++) if (eq[i].q > eq[peakIdx].q) peakIdx = i;
+      const peak = eq[peakIdx];
+      xFD.fillStyle = "rgba(230,237,243,0.55)";
+      xFD.font = "10px -apple-system, Segoe UI, sans-serif";
+      xFD.textAlign = "left";
+      xFD.textBaseline = "bottom";
+      xFD.fillText("IDM equilibrium q(ρ)", kToX(peak.k) + 6, Math.max(12, qToY(peak.q) - 4));
+    }
+
+    // Hysteresis polyline: connect the (decimated) trajectory so the (ρ, q)
+    // loop during jam formation/dissipation is visible. Faint for the long
+    // tail, bolder for the last ~40 points so recent motion is easy to follow.
+    const pts = chartData.fd;
+    const n = pts.length;
+    const TAIL = 40;
+    // Decimate older points when the buffer grows to keep the polyline cheap.
+    const stride = n > 600 ? Math.ceil(n / 600) : 1;
+    if (n > 2) {
+      xFD.strokeStyle = "rgba(79,195,247,0.18)";
+      xFD.lineWidth = 1;
+      xFD.beginPath();
+      let started = false;
+      for (let i = 0; i < Math.max(0, n - TAIL); i += stride) {
+        const p = pts[i];
+        const x = kToX(p.k), y = qToY(p.q);
+        if (!started) { xFD.moveTo(x, y); started = true; }
+        else xFD.lineTo(x, y);
+      }
+      if (n > TAIL) {
+        const p = pts[n - TAIL - 1];
+        xFD.lineTo(kToX(p.k), qToY(p.q));
+      }
+      xFD.stroke();
+      // Bold recent trace
+      xFD.strokeStyle = "rgba(79,195,247,0.6)";
+      xFD.lineWidth = 1.5;
+      xFD.beginPath();
+      const startRecent = Math.max(0, n - TAIL);
+      for (let i = startRecent; i < n; i++) {
+        const p = pts[i];
+        const x = kToX(p.k), y = qToY(p.q);
+        if (i === startRecent) xFD.moveTo(x, y); else xFD.lineTo(x, y);
+      }
+      xFD.stroke();
+    }
+
+    // Scatter — older points fade (alpha = 0.15 → 0.85 over the buffer).
+    for (let i = 0; i < n; i++) {
+      const p = pts[i];
+      const t = n > 1 ? i / (n - 1) : 1;
+      const alpha = 0.15 + 0.6 * t;
+      xFD.fillStyle = `rgba(79,195,247,${alpha.toFixed(3)})`;
+      xFD.beginPath();
+      xFD.arc(kToX(p.k), qToY(p.q), 2.2, 0, Math.PI * 2);
       xFD.fill();
     }
     // highlight latest
     if (n > 0) {
-      const p = chartData.fd[n - 1];
-      const x = x0 + (p.k / maxK) * plotW;
-      const y = h - (p.q / maxQ) * h;
+      const p = pts[n - 1];
       xFD.strokeStyle = "#ffb74d";
       xFD.lineWidth = 2;
       xFD.beginPath();
-      xFD.arc(x, y, 4.5, 0, Math.PI * 2);
+      xFD.arc(kToX(p.k), qToY(p.q), 4.5, 0, Math.PI * 2);
       xFD.stroke();
     }
     // x-axis labels
@@ -694,8 +909,7 @@
       }
       const v = binSum[i] / binCnt[i];
       const ratio = Math.max(0, Math.min(1, v / params.v0));
-      const hue = Math.round(ratio * 120);
-      const [r, g, b] = hslToRgb(hue / 360, 0.8, 0.25 + 0.35 * ratio);
+      const [r, g, b] = viridis(ratio);
       colImg.data[i * 4]     = r;
       colImg.data[i * 4 + 1] = g;
       colImg.data[i * 4 + 2] = b;
@@ -730,17 +944,52 @@
     xST.fillStyle = "#0e1620";
     xST.fillRect(0, 0, W, H);
     xST.imageSmoothingEnabled = false;
-    // leave 30 px on the left for y-axis label and 16 px at the bottom for x-axis label
-    xST.drawImage(stBuf, 30, 0, W - 30, H - 16);
-    // labels
+    // Layout: 30 px left gutter for y-axis labels, 16 px bottom gutter for x-axis label.
+    const plotX = 30, plotY = 0;
+    const plotW = W - plotX, plotH = H - 16;
+    xST.drawImage(stBuf, plotX, plotY, plotW, plotH);
+
+    // Measuring-region band overlay — connects the orange arc on the ring to
+    // a horizontal band on the ST diagram. Position 0 is the top of the ring
+    // (y = top of the plot); position increases clockwise downward.
+    const centerFrac = ((params.regionCenter % 360) + 360) % 360 / 360;
+    const halfFrac = (params.regionSpan / 2) / 360;
+    xST.fillStyle = "rgba(255,183,77,0.14)";
+    // Band may wrap across the top/bottom of the plot (ring is periodic).
+    const y1 = plotY + (centerFrac - halfFrac) * plotH;
+    const y2 = plotY + (centerFrac + halfFrac) * plotH;
+    // Draw one or two rectangles to handle wrap.
+    const draw = (yA, yB) => {
+      const a = Math.max(plotY, Math.min(plotY + plotH, yA));
+      const b = Math.max(plotY, Math.min(plotY + plotH, yB));
+      if (b > a) xST.fillRect(plotX, a, plotW, b - a);
+    };
+    if (y1 < plotY)          { draw(y1 + plotH, plotY + plotH); draw(plotY, y2); }
+    else if (y2 > plotY + plotH) { draw(y1, plotY + plotH); draw(plotY, y2 - plotH); }
+    else                     { draw(y1, y2); }
+
+    // Y-axis orientation ticks: 0° at top, 180° middle, 360° bottom.
     xST.fillStyle = "rgba(230,237,243,0.55)";
     xST.font = "10px -apple-system, Segoe UI, sans-serif";
+    xST.textAlign = "right";
+    xST.textBaseline = "top";
+    xST.fillText("0°", plotX - 4, 2);
+    xST.textBaseline = "middle";
+    xST.fillText("180°", plotX - 4, plotY + plotH / 2);
+    xST.textBaseline = "bottom";
+    xST.fillText("360°", plotX - 4, plotY + plotH - 2);
+
+    // Bottom x-axis label
+    xST.fillStyle = "rgba(230,237,243,0.55)";
     xST.textAlign = "center";
-    xST.fillText("time (old → now)", (W - 30) / 2 + 30, H - 4);
+    xST.textBaseline = "bottom";
+    xST.fillText("time (old → now)", plotX + plotW / 2, H - 3);
+    // Rotated y-axis label
     xST.save();
     xST.translate(10, H / 2);
     xST.rotate(-Math.PI / 2);
     xST.textAlign = "center";
+    xST.textBaseline = "middle";
     xST.fillText("position on ring", 0, 0);
     xST.restore();
   }
@@ -926,6 +1175,15 @@
     paused = !paused;
     pauseBtn.textContent = paused ? "Resume" : "Pause";
   });
+
+  // Respect users who ask for reduced motion (WCAG 2.3.3). Start paused so the
+  // ring animation doesn't trigger vestibular discomfort; they can opt in.
+  try {
+    if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      paused = true;
+      pauseBtn.textContent = "Play";
+    }
+  } catch (_) { /* non-supporting browser */ }
 
   // "Copy link" button — serialises current params to the URL and copies it.
   const copyLinkBtn = document.getElementById("copyLink");

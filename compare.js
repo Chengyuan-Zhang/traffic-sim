@@ -25,6 +25,20 @@
     c.getContext("2d").setTransform(DPR, 0, 0, DPR, 0, 0);
   }
 
+  // ---------- Viridis colormap (color-blind-safe, perceptually uniform) ----------
+  const VIRIDIS = [[68,1,84],[59,82,139],[33,145,140],[94,201,98],[253,231,37]];
+  function viridisCss(t) {
+    t = Math.max(0, Math.min(0.999, t || 0));
+    const idx = t * (VIRIDIS.length - 1);
+    const i = Math.floor(idx);
+    const f = idx - i;
+    const a = VIRIDIS[i], b = VIRIDIS[i + 1] || a;
+    const r = Math.round(a[0] + (b[0] - a[0]) * f);
+    const g = Math.round(a[1] + (b[1] - a[1]) * f);
+    const bl = Math.round(a[2] + (b[2] - a[2]) * f);
+    return `rgb(${r},${g},${bl})`;
+  }
+
   // ================================================================
   // Shared parameters + three sim instances running in lockstep.
   // ================================================================
@@ -345,10 +359,9 @@
       const theta = (c.s / L) * 2 * Math.PI - Math.PI / 2;
       const x = cx + rPix * Math.cos(theta);
       const y = cy + rPix * Math.sin(theta);
-      // color by speed (red -> green)
+      // color by speed (viridis: dark = slow, bright = fast)
       const sp = Math.min(1, c.v / params.v0);
-      const hue = Math.round(sp * 120); // 0=red, 120=green
-      ctx.fillStyle = `hsl(${hue}, 80%, 55%)`;
+      ctx.fillStyle = viridisCss(sp);
       ctx.beginPath(); ctx.arc(x, y, carHalfPix, 0, Math.PI * 2); ctx.fill();
       if (c.tagged) {
         ctx.strokeStyle = "#fff"; ctx.lineWidth = 2;
@@ -567,6 +580,35 @@
   // ================================================================
   // Metrics
   // ================================================================
+  // Store raw numeric values by (metricKey, modeId) so we can re-normalise the
+  // bar widths against the row's max on every update. Order of rows matches
+  // the HTML <tbody> layout.
+  const METRIC_ROWS = ["std", "ac1", "tau", "sv", "jam"];
+  const METRIC_DIGITS = { std: 3, ac1: 3, tau: 2, sv: 2, jam: 1 };
+  const metricValues = {};
+  for (const r of METRIC_ROWS) metricValues[r] = { white: NaN, ar: NaN, gp: NaN };
+
+  function writeMetric(row, mid, value) {
+    metricValues[row][mid] = value;
+    // Row max, ignoring NaN. Use absolute value so negative lag-1 AC
+    // (possible in very anticorrelated AR realisations) still bars sensibly.
+    let mx = 0;
+    for (const m of ["white", "ar", "gp"]) {
+      const v = Math.abs(metricValues[row][m]);
+      if (Number.isFinite(v) && v > mx) mx = v;
+    }
+    for (const m of ["white", "ar", "gp"]) {
+      const cell = document.getElementById(`m-${row}-${m}`);
+      if (!cell) continue;
+      const raw = metricValues[row][m];
+      if (!Number.isFinite(raw)) { cell.textContent = "–"; continue; }
+      const frac = mx > 0 ? Math.min(1, Math.abs(raw) / mx) : 0;
+      const digits = METRIC_DIGITS[row];
+      const txt = row === "jam" ? raw.toFixed(digits) + "%" : raw.toFixed(digits);
+      cell.innerHTML = `<span class="mbar" style="--w:${(frac * 100).toFixed(1)}%"></span><span class="mnum">${txt}</span>`;
+    }
+  }
+
   function updateMetrics() {
     for (const m of MODES) {
       const sim = sims.find((s) => s.mode === m.id);
@@ -599,12 +641,12 @@
       // Jam fraction
       const jamFrac = sim.totalFrames ? (100 * sim.jamFrames / sim.totalFrames) : 0;
 
-      document.getElementById("m-std-" + mid).textContent = Math.sqrt(var0).toFixed(3);
-      document.getElementById("m-ac1-" + mid).textContent = ac1.toFixed(3);
-      document.getElementById("m-tau-" + mid).textContent = tauEff.toFixed(2);
-      document.getElementById("m-sv-"  + mid).textContent = spStd.toFixed(2);
-      document.getElementById("m-jam-" + mid).textContent = jamFrac.toFixed(1) + "%";
-      document.getElementById("avg-"   + mid).textContent =
+      writeMetric("std", mid, Math.sqrt(var0));
+      writeMetric("ac1", mid, ac1);
+      writeMetric("tau", mid, tauEff);
+      writeMetric("sv",  mid, spStd);
+      writeMetric("jam", mid, jamFrac);
+      document.getElementById("avg-" + mid).textContent =
         (asp.length ? asp[asp.length - 1] : 0).toFixed(1);
     }
   }
@@ -659,6 +701,14 @@
   });
 
   let paused = false;
+  // Respect prefers-reduced-motion: start paused.
+  try {
+    if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      paused = true;
+      const pb = document.getElementById("cmpPause");
+      if (pb) pb.textContent = "Play";
+    }
+  } catch (_) { /* non-supporting browser */ }
   document.getElementById("cmpReset").addEventListener("click", resetAll);
   document.getElementById("cmpPause").addEventListener("click", (e) => {
     paused = !paused;
