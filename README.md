@@ -111,12 +111,39 @@ Everything is adjustable from the sidebar while the simulation is running.
 
 - **Perturb** — forces one random car to brake for 2 s (seeds a jam wave).
 - **Reset** / **Pause**.
+- **Copy link** — copies a URL whose `#` fragment encodes every slider value,
+  so you can share or bookmark a specific configuration. Set `seed=<int>` in
+  the URL (non-zero) to make the run fully reproducible via a seeded PRNG.
+
+**Keyboard shortcuts:** `Space` pause, `P` perturb, `R` reset.
+
+## Compare-models page
+
+[`compare.html`](compare.html) runs all three noise models *side-by-side* on
+three lockstep ring roads sharing the same initial conditions and IDM
+parameters. Useful for seeing how `η(t)`'s temporal structure translates into
+macroscopic jam waves. It plots:
+
+- Three mini ring canvases.
+- The `η(t)` trace of a single tagged car per mode.
+- The autocorrelation **ACF(τ)** of `η(t)` — the quantity that most clearly
+  distinguishes white noise (no correlation) from AR(p) and GP.
+- Overlaid fundamental diagrams (flow vs density) per model.
+- A summary-metrics table (empirical σ, lag-1 ρ, effective correlation time,
+  std of avg ring speed, % time jammed).
+
+Each model uses its own posterior-mean σ from Table 1 of the respective
+paper; the *Noise scale* slider multiplies all three by the same factor, so
+`1×` reproduces paper fidelity.
 
 ## Files
 
-- `index.html` — page layout and controls
-- `styles.css` — styling
-- `simulation.js` — IDM integration, noise models, and canvas rendering
+- `index.html` — main-simulator page layout and controls
+- `compare.html` — side-by-side noise-model comparison page
+- `styles.css` — shared styling for both pages
+- `simulation.js` — IDM integration, three noise models, and canvas rendering
+- `compare.js` — lockstep IDM × 3 with per-model paper-calibrated sigmas
+- `page.js` — small shared page-glue script (Copy-BibTeX, mailto obfuscation)
 - `.nojekyll` — tells GitHub Pages not to process with Jekyll
 
 ## Contact

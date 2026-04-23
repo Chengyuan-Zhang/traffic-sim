@@ -2,19 +2,36 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 <title>Compare noise models — traffic-sim</title>
+<meta name="description" content="Three stochastic car-following models (Gaussian process, AR(p), white noise) side-by-side on three ring roads. Compare ACF, fundamental diagram, and summary metrics in real time." />
+<meta name="author" content="Chengyuan Zhang" />
+<meta name="theme-color" content="#0f1720" />
+<meta property="og:type" content="website" />
+<meta property="og:title" content="Compare noise models — traffic-sim" />
+<meta property="og:description" content="Gaussian process vs AR(p) vs white noise IDM, side-by-side." />
+<meta property="og:image" content="https://chengyuan-zhang.github.io/traffic-sim/preview.png" />
+<meta property="og:url" content="https://chengyuan-zhang.github.io/traffic-sim/compare.html" />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="Compare noise models — traffic-sim" />
+<meta name="twitter:description" content="Gaussian process vs AR(p) vs white noise IDM, side-by-side." />
+<meta name="twitter:image" content="https://chengyuan-zhang.github.io/traffic-sim/preview.png" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='22' fill='none' stroke='%234fc3f7' stroke-width='8'/%3E%3Ccircle cx='32' cy='10' r='5' fill='%23ffb74d'/%3E%3Ccircle cx='54' cy='32' r='5' fill='%2381c784'/%3E%3C/svg%3E" />
+<link rel="preconnect" href="https://arxiv.org" />
+<link rel="preconnect" href="https://doi.org" />
 <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <nav class="topnav">
+  <nav class="topnav" aria-label="Primary">
     <a class="topnav-brand" href="index.html">🚗 traffic-sim</a>
-    <div class="topnav-links">
-      <a class="topnav-link" href="index.html">Simulator</a>
-      <a class="topnav-link active" href="compare.html">Compare models</a>
-      <a class="topnav-link" href="https://github.com/Chengyuan-Zhang/traffic-sim" target="_blank" rel="noopener">GitHub</a>
-    </div>
+    <ul class="topnav-links">
+      <li><a class="topnav-link" href="index.html">Simulator</a></li>
+      <li><a class="topnav-link active" href="compare.html" aria-current="page">Compare models</a></li>
+      <li><a class="topnav-link" href="https://github.com/Chengyuan-Zhang/traffic-sim" target="_blank" rel="noopener noreferrer">GitHub</a></li>
+    </ul>
   </nav>
+
+  <main>
 
   <header>
     <h1>How does noise change car-following?</h1>
@@ -22,9 +39,9 @@
       Three ring roads run side-by-side with <em>identical IDM parameters and initial
       conditions</em>. The only difference is the driver-noise model on the acceleration
       residual <code>η(t)</code>:
-      <strong style="color:#ff7675">white noise (B-IDM)</strong>,
-      <strong style="color:#74b9ff">AR(p) (DR-IDM)</strong>,
-      <strong style="color:#55efc4">Gaussian process (MA-IDM)</strong>.
+      <strong style="color:#ff7675"><span class="mk-sq" aria-hidden="true"></span> white noise (B-IDM)</strong>,
+      <strong style="color:#74b9ff"><span class="mk-tri" aria-hidden="true"></span> AR(p) (DR-IDM)</strong>,
+      <strong style="color:#55efc4"><span class="mk-circ" aria-hidden="true"></span> Gaussian process (MA-IDM)</strong>.
       The autocorrelation of <code>η(t)</code>, the fundamental diagram, and summary
       metrics reveal the qualitative differences — persistent waves and FD hysteresis
       under correlated noise, fine jitter under white noise.
@@ -77,6 +94,7 @@
       <button id="cmpPerturb" type="button">Perturb all</button>
       <button id="cmpReset" type="button">Reset</button>
       <button id="cmpPause" type="button">Pause</button>
+      <button id="cmpCopyLink" type="button" title="Copy a URL that reproduces the current parameters">Copy link</button>
     </div>
     <p class="hint">
       All three rings start from the same initial state. Each mode uses its own
@@ -87,25 +105,25 @@
       <strong style="color:#ff7675">white σ<sub>η</sub> = 0.240 m/s²</strong> &nbsp;·&nbsp;
       <strong style="color:#74b9ff">AR σ<sub>η</sub> (innovation) = 0.019 → 0.014 m/s²</strong> for p = 1…7 &nbsp;·&nbsp;
       <strong style="color:#55efc4">GP σ<sub>k</sub> = 0.202 m/s²</strong>, ℓ = 1.44 s.
-      Source: Table 1 of <a href="https://arxiv.org/abs/2307.03340" target="_blank" rel="noopener">Zhang, Wang &amp; Sun (2024)</a>
-      and <a href="https://arxiv.org/abs/2210.03571" target="_blank" rel="noopener">Zhang &amp; Sun (2024)</a>.
+      Source: Table 1 of <a href="https://arxiv.org/abs/2307.03340" target="_blank" rel="noopener noreferrer">Zhang, Wang &amp; Sun (2024)</a>
+      and <a href="https://arxiv.org/abs/2210.03571" target="_blank" rel="noopener noreferrer">Zhang &amp; Sun (2024)</a>.
     </p>
   </aside>
 
   <section class="cmp-rings">
     <div class="cmp-ring">
-      <div class="cmp-label" style="color:#ff7675">White noise &mdash; B-IDM</div>
-      <canvas id="ring-white" width="340" height="340"></canvas>
+      <div class="cmp-label" style="color:#ff7675"><span class="mk-sq" aria-hidden="true"></span> White noise &mdash; B-IDM</div>
+      <canvas id="ring-white" width="340" height="340" aria-label="Ring road running the white-noise B-IDM model"></canvas>
       <div class="cmp-stats"><span>v̄</span><strong id="avg-white">–</strong><span>m/s</span></div>
     </div>
     <div class="cmp-ring">
-      <div class="cmp-label" style="color:#74b9ff">AR(p) &mdash; DR-IDM</div>
-      <canvas id="ring-ar" width="340" height="340"></canvas>
+      <div class="cmp-label" style="color:#74b9ff"><span class="mk-tri" aria-hidden="true"></span> AR(p) &mdash; DR-IDM</div>
+      <canvas id="ring-ar" width="340" height="340" aria-label="Ring road running the autoregressive AR(p) DR-IDM model"></canvas>
       <div class="cmp-stats"><span>v̄</span><strong id="avg-ar">–</strong><span>m/s</span></div>
     </div>
     <div class="cmp-ring">
-      <div class="cmp-label" style="color:#55efc4">Gaussian process &mdash; MA-IDM</div>
-      <canvas id="ring-gp" width="340" height="340"></canvas>
+      <div class="cmp-label" style="color:#55efc4"><span class="mk-circ" aria-hidden="true"></span> Gaussian process &mdash; MA-IDM</div>
+      <canvas id="ring-gp" width="340" height="340" aria-label="Ring road running the Gaussian-process MA-IDM model"></canvas>
       <div class="cmp-stats"><span>v̄</span><strong id="avg-gp">–</strong><span>m/s</span></div>
     </div>
   </section>
@@ -144,9 +162,9 @@
         <thead>
           <tr>
             <th>Metric</th>
-            <th style="color:#ff7675">White (B-IDM)</th>
-            <th style="color:#74b9ff">AR(p) (DR-IDM)</th>
-            <th style="color:#55efc4">GP (MA-IDM)</th>
+            <th><span class="mk-sq" aria-hidden="true"></span> <span style="color:#ff7675">White (B-IDM)</span></th>
+            <th><span class="mk-tri" aria-hidden="true"></span> <span style="color:#74b9ff">AR(p) (DR-IDM)</span></th>
+            <th><span class="mk-circ" aria-hidden="true"></span> <span style="color:#55efc4">GP (MA-IDM)</span></th>
           </tr>
         </thead>
         <tbody id="metrics-body">
@@ -161,16 +179,20 @@
     </div>
   </section>
 
+  </main>
+
   <footer>
-    <p>Source on <a href="https://github.com/Chengyuan-Zhang/traffic-sim" target="_blank" rel="noopener">GitHub</a>.</p>
+    <p>Source on <a href="https://github.com/Chengyuan-Zhang/traffic-sim" target="_blank" rel="noopener noreferrer">GitHub</a>.</p>
     <p class="tribute-small">
-      With gratitude to <strong>Dr. <a href="https://mtreiber.de/" target="_blank" rel="noopener">Martin Treiber</a></strong> —
+      With gratitude to <strong>Dr. <a href="https://mtreiber.de/" target="_blank" rel="noopener noreferrer">Martin Treiber</a></strong> —
       inventor of the IDM and pioneer of stochastic car-following — whose research, and whose
-      interactive <a href="https://traffic-simulation.de/" target="_blank" rel="noopener">traffic-simulation.de</a>,
+      interactive <a href="https://traffic-simulation.de/" target="_blank" rel="noopener noreferrer">traffic-simulation.de</a>,
       inspired this project.
     </p>
   </footer>
 
+  <script src="page.js" defer></script>
   <script src="compare.js"></script>
 </body>
 </html>
+

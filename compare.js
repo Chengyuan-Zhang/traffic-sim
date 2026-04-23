@@ -1,6 +1,30 @@
 (() => {
   "use strict";
 
+  // ---------- Seeded PRNG (mulberry32) ----------
+  function mulberry32(seed) {
+    let s = seed >>> 0;
+    return function () {
+      s = (s + 0x6D2B79F5) | 0;
+      let t = Math.imul(s ^ (s >>> 15), 1 | s);
+      t ^= t + Math.imul(t ^ (t >>> 7), 61 | t);
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  let rand = Math.random;
+
+  // ---------- HiDPI canvas helper ----------
+  const DPR = Math.max(1, window.devicePixelRatio || 1);
+  function fitCanvas(c, cssW, cssH) {
+    c.style.width = cssW + "px";
+    c.style.height = cssH + "px";
+    c.width = Math.max(1, Math.floor(cssW * DPR));
+    c.height = Math.max(1, Math.floor(cssH * DPR));
+    c._w = cssW;
+    c._h = cssH;
+    c.getContext("2d").setTransform(DPR, 0, 0, DPR, 0, 0);
+  }
+
   // ================================================================
   // Shared parameters + three sim instances running in lockstep.
   // ================================================================
@@ -18,7 +42,42 @@
     ell: 1.6,
     kernel: "rbf",
     arOrder: 5,
+    seed: 0,
   };
+
+  // ---------- Load params from URL hash + localStorage (URL > storage > defaults) ----------
+  const STRING_KEYS = new Set(["kernel"]);
+  function coerceParam(k, v) {
+    if (STRING_KEYS.has(k)) return String(v);
+    const n = Number(v);
+    return Number.isFinite(n) ? n : v;
+  }
+  try {
+    const stored = JSON.parse(localStorage.getItem("traffic-sim-cmp-params") || "{}");
+    for (const [k, v] of Object.entries(stored)) {
+      if (k in params) params[k] = coerceParam(k, v);
+    }
+  } catch (_) { /* ignore */ }
+  try {
+    const hash = new URLSearchParams((location.hash || "").slice(1));
+    for (const [k, v] of hash.entries()) {
+      if (k in params) params[k] = coerceParam(k, v);
+    }
+  } catch (_) { /* ignore */ }
+  if (params.seed && params.seed > 0) rand = mulberry32(params.seed | 0);
+
+  let _writeStateT = 0;
+  function scheduleWriteState() {
+    clearTimeout(_writeStateT);
+    _writeStateT = setTimeout(() => {
+      try {
+        const q = new URLSearchParams();
+        for (const [k, v] of Object.entries(params)) q.set(k, String(v));
+        history.replaceState(null, "", "#" + q.toString());
+        localStorage.setItem("traffic-sim-cmp-params", JSON.stringify(params));
+      } catch (_) { /* best-effort */ }
+    }, 200);
+  }
 
   // Posterior-mean sigmas from the calibration papers.
   //  - SIGMA_WHITE : B-IDM marginal std of η  (Zhang, Wang & Sun 2024, Table 1)
@@ -51,8 +110,8 @@
 
   function randn() {
     let u = 0, v = 0;
-    while (u === 0) u = Math.random();
-    while (v === 0) v = Math.random();
+    while (u === 0) u = rand();
+    while (v === 0) v = rand();
     return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
   }
   function studentT(df) {
@@ -73,7 +132,7 @@
     const om = new Float32Array(GP_M), ph = new Float32Array(GP_M);
     for (let m = 0; m < GP_M; m++) {
       om[m] = sampleOmega(ell, kernel);
-      ph[m] = Math.random() * 2 * Math.PI;
+      ph[m] = rand() * 2 * Math.PI;
     }
     return { om, ph };
   }
@@ -194,7 +253,9 @@
         if (sim.mode === "white") eta = whiteNoise();
         else if (sim.mode === "ar") eta = arNoise(me, dt);
         else eta = gpNoise(me, sim.simTime);
-        acc += eta;
+        // Soft-saturate at ±5 m/s² — see simulation.js for rationale.
+        const ETAMAX = 5.0;
+        acc += Math.tanh(eta / ETAMAX) * ETAMAX;
       }
       me.lastEta = eta;
       if (me.perturbUntil > 0) { acc = Math.min(acc, -4.0); me.perturbUntil -= dt; }
@@ -265,7 +326,7 @@
   function drawRing(mode) {
     const sim = sims.find((s) => s.mode === mode);
     const { canvas, ctx } = ringCtx[mode];
-    const W = canvas.width, H = canvas.height;
+    const W = canvas._w || canvas.width, H = canvas._h || canvas.height;
     ctx.clearRect(0, 0, W, H);
     const cx = W / 2, cy = H / 2;
     const margin = 24;
@@ -322,7 +383,7 @@
   }
 
   function drawEta() {
-    const W = cEta.width, H = cEta.height;
+    const W = cEta._w || cEta.width, H = cEta._h || cEta.height;
     drawChartFrame(xEta, W, H, "time (s)", "η(t) (m/s²)");
     const window = 500;
     // y-range: symmetric around 0, large enough to fit the biggest of the three
@@ -380,7 +441,7 @@
   }
 
   function drawAcf() {
-    const W = cAcf.width, H = cAcf.height;
+    const W = cAcf._w || cAcf.width, H = cAcf._h || cAcf.height;
     drawChartFrame(xAcf, W, H, "lag τ (s)", "ACF(τ)");
     const maxLagSec = 6.0;
     const maxLag = Math.round(maxLagSec / params.dtStep);
@@ -469,7 +530,7 @@
   }
 
   function drawFd() {
-    const W = cFd.width, H = cFd.height;
+    const W = cFd._w || cFd.width, H = cFd._h || cFd.height;
     drawChartFrame(xFd, W, H, "density k (veh/km)", "flow q (veh/hr)");
     updateFdAxes();
     const padL = 52, padR = 12, padT = 14, padB = 26;
@@ -554,13 +615,17 @@
   function bindRange(id, key, fmt) {
     const el = document.getElementById(id);
     const out = document.getElementById(id + "Val");
-    const sync = () => {
+    if (params[key] !== undefined) el.value = String(params[key]);
+    const sync = (isUser) => {
       const val = parseFloat(el.value);
       params[key] = val;
-      if (out) out.textContent = fmt ? fmt(val) : val;
+      const label = fmt ? fmt(val) : val;
+      if (out) out.textContent = label;
+      el.setAttribute("aria-valuetext", String(label));
+      if (isUser) scheduleWriteState();
     };
-    el.addEventListener("input", sync);
-    sync();
+    el.addEventListener("input", () => sync(true));
+    sync(false);
   }
   bindRange("cmpN", "numCars");
   bindRange("cmpRadius", "radius");
@@ -573,11 +638,16 @@
   document.getElementById("cmpEll").addEventListener("change", () => {
     resampleAllGP();
   });
-  document.getElementById("cmpKernel").addEventListener("change", (e) => {
+  const cmpKernelEl = document.getElementById("cmpKernel");
+  if (params.kernel) cmpKernelEl.value = params.kernel;
+  cmpKernelEl.addEventListener("change", (e) => {
     params.kernel = e.target.value;
     resampleAllGP();
+    scheduleWriteState();
   });
-  document.getElementById("cmpAR").addEventListener("change", (e) => {
+  const cmpARel = document.getElementById("cmpAR");
+  if (params.arOrder) cmpARel.value = String(params.arOrder);
+  cmpARel.addEventListener("change", (e) => {
     params.arOrder = parseInt(e.target.value, 10);
     for (const sim of sims) {
       for (const c of sim.cars) {
@@ -585,6 +655,7 @@
         c.arAccum = 0;
       }
     }
+    scheduleWriteState();
   });
 
   let paused = false;
@@ -595,10 +666,66 @@
   });
   document.getElementById("cmpPerturb").addEventListener("click", () => {
     for (const sim of sims) {
-      const idx = Math.floor(Math.random() * sim.cars.length);
+      const idx = Math.floor(rand() * sim.cars.length);
       sim.cars[idx].perturbUntil = 2.0;
     }
   });
+
+  // "Copy link" button.
+  const cmpCopyLink = document.getElementById("cmpCopyLink");
+  if (cmpCopyLink) {
+    cmpCopyLink.addEventListener("click", async () => {
+      clearTimeout(_writeStateT);
+      const q = new URLSearchParams();
+      for (const [k, v] of Object.entries(params)) q.set(k, String(v));
+      history.replaceState(null, "", "#" + q.toString());
+      const url = location.href;
+      try { await navigator.clipboard.writeText(url); }
+      catch (_) {
+        const ta = document.createElement("textarea");
+        ta.value = url; ta.style.position = "fixed"; ta.style.opacity = "0";
+        document.body.appendChild(ta); ta.select();
+        try { document.execCommand("copy"); } catch (__) {}
+        document.body.removeChild(ta);
+      }
+      const orig = cmpCopyLink.textContent;
+      cmpCopyLink.textContent = "Copied ✓";
+      setTimeout(() => { cmpCopyLink.textContent = orig; }, 1600);
+    });
+  }
+
+  // Keyboard shortcuts.
+  document.addEventListener("keydown", (e) => {
+    const tag = (e.target && e.target.tagName) || "";
+    if (tag === "INPUT" || tag === "SELECT" || tag === "TEXTAREA") return;
+    if (e.key === " " || e.code === "Space") { e.preventDefault(); document.getElementById("cmpPause").click(); }
+    else if (e.key === "p" || e.key === "P") { document.getElementById("cmpPerturb").click(); }
+    else if (e.key === "r" || e.key === "R") { document.getElementById("cmpReset").click(); }
+  });
+
+  // HiDPI fit for all canvases on window resize and at startup.
+  function fitAllCanvases() {
+    const allCanvases = [
+      ...MODES.map((m) => ringCtx[m.id].canvas),
+      cEta, cAcf, cFd,
+    ];
+    for (const c of allCanvases) {
+      const r = c.getBoundingClientRect();
+      const w = Math.max(50, Math.floor(r.width));
+      const origW = Number(c.getAttribute("width")) || c.width;
+      const origH = Number(c.getAttribute("height")) || c.height;
+      const h = Math.max(50, Math.floor(w * (origH / origW)));
+      fitCanvas(c, w, h);
+    }
+  }
+  window.addEventListener("resize", fitAllCanvases);
+  if (window.matchMedia) {
+    try {
+      const mq = window.matchMedia(`(resolution: ${DPR}dppx)`);
+      if (mq && mq.addEventListener) mq.addEventListener("change", fitAllCanvases);
+    } catch (_) {}
+  }
+  fitAllCanvases();
 
   // ================================================================
   // Main loop

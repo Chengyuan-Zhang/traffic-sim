@@ -1,6 +1,31 @@
 (() => {
   "use strict";
 
+  // ---------- Seeded PRNG (mulberry32) ----------
+  // seed = 0 means "unseeded" (use Math.random); any positive int gives reproducibility.
+  function mulberry32(seed) {
+    let s = seed >>> 0;
+    return function () {
+      s = (s + 0x6D2B79F5) | 0;
+      let t = Math.imul(s ^ (s >>> 15), 1 | s);
+      t ^= t + Math.imul(t ^ (t >>> 7), 61 | t);
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  let rand = Math.random;
+
+  // ---------- HiDPI canvas scaling ----------
+  const DPR = Math.max(1, window.devicePixelRatio || 1);
+  function fitCanvas(c, cssW, cssH) {
+    c.style.width = cssW + "px";
+    c.style.height = cssH + "px";
+    c.width = Math.max(1, Math.floor(cssW * DPR));
+    c.height = Math.max(1, Math.floor(cssH * DPR));
+    c._w = cssW;
+    c._h = cssH;
+    c.getContext("2d").setTransform(DPR, 0, 0, DPR, 0, 0);
+  }
+
   const canvas = document.getElementById("road");
   const ctx = canvas.getContext("2d");
 
@@ -28,7 +53,45 @@
     // Measuring region on the ring (in degrees; 0 = top, clockwise).
     regionCenter: 0,
     regionSpan: 90,
+
+    // Seeded PRNG: 0 = unseeded (Math.random); any positive int reproduces a run.
+    seed: 0,
   };
+
+  // ---------- Load params from URL hash + localStorage (URL > storage > defaults) ----------
+  const STRING_KEYS = new Set(["gpKernel", "noiseMode"]);
+  function coerceParam(k, v) {
+    if (STRING_KEYS.has(k)) return String(v);
+    const n = Number(v);
+    return Number.isFinite(n) ? n : v;
+  }
+  try {
+    const stored = JSON.parse(localStorage.getItem("traffic-sim-params") || "{}");
+    for (const [k, v] of Object.entries(stored)) {
+      if (k in params) params[k] = coerceParam(k, v);
+    }
+  } catch (_) { /* ignore corrupted localStorage */ }
+  try {
+    const hash = new URLSearchParams((location.hash || "").slice(1));
+    for (const [k, v] of hash.entries()) {
+      if (k in params) params[k] = coerceParam(k, v);
+    }
+  } catch (_) { /* ignore malformed hash */ }
+  if (params.seed && params.seed > 0) rand = mulberry32(params.seed | 0);
+
+  // Debounced URL + localStorage sync.
+  let _writeStateT = 0;
+  function scheduleWriteState() {
+    clearTimeout(_writeStateT);
+    _writeStateT = setTimeout(() => {
+      try {
+        const q = new URLSearchParams();
+        for (const [k, v] of Object.entries(params)) q.set(k, String(v));
+        history.replaceState(null, "", "#" + q.toString());
+        localStorage.setItem("traffic-sim-params", JSON.stringify(params));
+      } catch (_) { /* best-effort */ }
+    }, 200);
+  }
 
   // AR coefficients calibrated on HighD (5 fps) in arXiv:2307.03340, Table 1.
   // Keys = AR order p; values = [rho_1, rho_2, ..., rho_p].
@@ -57,8 +120,8 @@
 
   function randn() {
     let u = 0, v = 0;
-    while (u === 0) u = Math.random();
-    while (v === 0) v = Math.random();
+    while (u === 0) u = rand();
+    while (v === 0) v = rand();
     return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
   }
 
@@ -88,7 +151,7 @@
     const phases = new Float32Array(GP_M);
     for (let m = 0; m < GP_M; m++) {
       omegas[m] = sampleOmega(ell, kernel);
-      phases[m] = Math.random() * 2 * Math.PI;
+      phases[m] = rand() * 2 * Math.PI;
     }
     return { omegas, phases };
   }
@@ -184,11 +247,17 @@
       if (gap < 0) gap += L;
       let acc = idmAccel(me.v, lead.v, gap);
 
-      // Driver noise: GP (MA-IDM), AR(1), or white (B-IDM baseline)
+      // Driver noise: GP (MA-IDM), AR(1), or white (B-IDM baseline).
+      // Soft-saturate at ±5 m/s²: a human driver physically cannot impose larger
+      // acceleration errors, and this keeps large-σ runs bounded without solely
+      // relying on the hard overlap clamp below. tanh is smooth & symmetric.
       if (params.gpSigma > 0) {
-        if (params.noiseMode === "white") acc += whiteNoise();
-        else if (params.noiseMode === "ar") acc += arNoise(me, dt);
-        else acc += gpNoise(me);
+        let eta;
+        if (params.noiseMode === "white") eta = whiteNoise();
+        else if (params.noiseMode === "ar") eta = arNoise(me, dt);
+        else eta = gpNoise(me);
+        const ETAMAX = 5.0;
+        acc += Math.tanh(eta / ETAMAX) * ETAMAX;
       }
 
       if (me.perturbUntil > 0) {
@@ -226,7 +295,7 @@
 
   // ---------- rendering ----------
   function draw() {
-    const W = canvas.width, H = canvas.height;
+    const W = canvas._w || canvas.width, H = canvas._h || canvas.height;
     ctx.clearRect(0, 0, W, H);
 
     const cx = W / 2, cy = H / 2;
@@ -380,6 +449,13 @@
     statDens.textContent = densPerKm.toFixed(1);
     statFlow.textContent = Math.round(flowPerHr);
 
+    // Live a11y label for the canvas (low-frequency update — matches stats cadence).
+    canvas.setAttribute(
+      "aria-label",
+      `Ring road; ${cars.length} cars; average speed ${avgAll.toFixed(1)} m/s; ` +
+      `density ${densPerKm.toFixed(1)} cars per km; flow ${Math.round(flowPerHr)} cars per hour.`
+    );
+
     // Region-scoped time series
     chartData.speed.push(avgReg);
     chartData.flow.push(flowPerHr);
@@ -478,7 +554,7 @@
   }
 
   function drawLineChart(canvas, cx, data, color, yMaxHint) {
-    const w = canvas.width, h = canvas.height;
+    const w = canvas._w || canvas.width, h = canvas._h || canvas.height;
     const yMax = Math.max(yMaxHint, ...(data.length ? data : [1])) * 1.1 || 1;
     drawAxes(cx, w, h, yMax);
 
@@ -533,7 +609,7 @@
   }
 
   function drawFD() {
-    const w = cFD.width, h = cFD.height;
+    const w = cFD._w || cFD.width, h = cFD._h || cFD.height;
     updateFDAxes();
     const maxK = fdAxes.maxK;
     const maxQ = fdAxes.maxQ;
@@ -650,18 +726,19 @@
   }
 
   function drawST() {
+    const W = cST._w || cST.width, H = cST._h || cST.height;
     xST.fillStyle = "#0e1620";
-    xST.fillRect(0, 0, cST.width, cST.height);
+    xST.fillRect(0, 0, W, H);
     xST.imageSmoothingEnabled = false;
     // leave 30 px on the left for y-axis label and 16 px at the bottom for x-axis label
-    xST.drawImage(stBuf, 30, 0, cST.width - 30, cST.height - 16);
+    xST.drawImage(stBuf, 30, 0, W - 30, H - 16);
     // labels
     xST.fillStyle = "rgba(230,237,243,0.55)";
     xST.font = "10px -apple-system, Segoe UI, sans-serif";
     xST.textAlign = "center";
-    xST.fillText("time (old → now)", (cST.width - 30) / 2 + 30, cST.height - 4);
+    xST.fillText("time (old → now)", (W - 30) / 2 + 30, H - 4);
     xST.save();
-    xST.translate(10, cST.height / 2);
+    xST.translate(10, H / 2);
     xST.rotate(-Math.PI / 2);
     xST.textAlign = "center";
     xST.fillText("position on ring", 0, 0);
@@ -725,13 +802,18 @@
   function bindRange(id, key, fmt = (v) => v) {
     const el = document.getElementById(id);
     const valEl = document.getElementById(id + "Val");
-    const update = () => {
+    // Apply loaded value (URL hash / localStorage) to the input before first read.
+    if (params[key] !== undefined) el.value = String(params[key]);
+    const update = (isUser) => {
       const v = parseFloat(el.value);
       params[key] = v;
-      valEl.textContent = fmt(v);
+      const label = fmt(v);
+      if (valEl) valEl.textContent = label;
+      el.setAttribute("aria-valuetext", String(label));
+      if (isUser) scheduleWriteState();
     };
-    el.addEventListener("input", update);
-    update();
+    el.addEventListener("input", () => update(true));
+    update(false);
   }
 
   bindRange("numCars", "numCars", (v) => String(v | 0));
@@ -751,11 +833,12 @@
   // AR order dropdown (not a range slider)
   const arOrderEl = document.getElementById("arOrder");
   const arOrderVal = document.getElementById("arOrderVal");
+  if (params.arOrder) arOrderEl.value = String(params.arOrder);
   function applyArOrder() {
     params.arOrder = parseInt(arOrderEl.value, 10);
     arOrderVal.textContent = params.arOrder;
-    // Reset per-car AR history so the change takes effect cleanly
     for (const c of cars) { c.arHist = []; c.arAccum = 0; }
+    scheduleWriteState();
   }
   arOrderEl.addEventListener("change", applyArOrder);
   applyArOrder();
@@ -763,9 +846,11 @@
   // Changing lengthscale or kernel requires resampling frequencies
   document.getElementById("gpEll").addEventListener("change", resampleAllGP);
   const gpKernelEl = document.getElementById("gpKernel");
+  if (params.gpKernel) gpKernelEl.value = params.gpKernel;
   gpKernelEl.addEventListener("change", () => {
     params.gpKernel = gpKernelEl.value;
     resampleAllGP();
+    scheduleWriteState();
   });
 
   // Noise model toggle — show only the controls relevant to the chosen model,
@@ -785,6 +870,7 @@
     white: 'I.i.d. Gaussian driver noise — the Bayesian IDM (B-IDM) baseline '
       + 'used for comparison in both Zhang &amp; Sun (2024) and Zhang, Wang &amp; Sun (2024).',
   };
+  if (params.noiseMode) noiseModeEl.value = params.noiseMode;
   function applyNoiseMode() {
     params.noiseMode = noiseModeEl.value;
     const isGP = params.noiseMode === "gp";
@@ -792,6 +878,7 @@
     kernelRow.style.display = isGP ? "" : "none";
     arRow.style.display     = params.noiseMode === "ar" ? "" : "none";
     if (modeCite) modeCite.innerHTML = CITE[params.noiseMode] || "";
+    scheduleWriteState();
   }
   noiseModeEl.addEventListener("change", applyNoiseMode);
   applyNoiseMode();
@@ -828,7 +915,7 @@
 
   document.getElementById("perturb").addEventListener("click", () => {
     if (!cars.length) return;
-    const idx = Math.floor(Math.random() * cars.length);
+    const idx = Math.floor(rand() * cars.length);
     cars[idx].perturbUntil = 2.0; // seconds of hard braking
   });
 
@@ -840,13 +927,63 @@
     pauseBtn.textContent = paused ? "Resume" : "Pause";
   });
 
+  // "Copy link" button — serialises current params to the URL and copies it.
+  const copyLinkBtn = document.getElementById("copyLink");
+  if (copyLinkBtn) {
+    copyLinkBtn.addEventListener("click", async () => {
+      // Force-flush pending URL sync before reading location.href.
+      clearTimeout(_writeStateT);
+      const q = new URLSearchParams();
+      for (const [k, v] of Object.entries(params)) q.set(k, String(v));
+      history.replaceState(null, "", "#" + q.toString());
+      const url = location.href;
+      try { await navigator.clipboard.writeText(url); }
+      catch (_) { /* fallback */
+        const ta = document.createElement("textarea");
+        ta.value = url; ta.style.position = "fixed"; ta.style.opacity = "0";
+        document.body.appendChild(ta); ta.select();
+        try { document.execCommand("copy"); } catch (__) {}
+        document.body.removeChild(ta);
+      }
+      const orig = copyLinkBtn.textContent;
+      copyLinkBtn.textContent = "Copied ✓";
+      setTimeout(() => { copyLinkBtn.textContent = orig; }, 1600);
+    });
+  }
+
+  // Keyboard shortcuts — useful for seminar / presentation demos.
+  document.addEventListener("keydown", (e) => {
+    // Ignore if the user is typing in a control.
+    const tag = (e.target && e.target.tagName) || "";
+    if (tag === "INPUT" || tag === "SELECT" || tag === "TEXTAREA") return;
+    if (e.key === " " || e.code === "Space") { e.preventDefault(); pauseBtn.click(); }
+    else if (e.key === "p" || e.key === "P") { document.getElementById("perturb").click(); }
+    else if (e.key === "r" || e.key === "R") { document.getElementById("reset").click(); }
+  });
+
   function setCanvasSize() {
     const rect = canvas.getBoundingClientRect();
     const size = Math.max(200, Math.floor(Math.min(rect.width, rect.height)));
-    canvas.width = size;
-    canvas.height = size;
+    fitCanvas(canvas, size, size);
+    // Resize chart canvases to match their rendered CSS size (charts are width:100%).
+    for (const c of [cSpeed, cFlow, cDens, cFD, cST]) {
+      const r = c.getBoundingClientRect();
+      const w = Math.max(50, Math.floor(r.width));
+      // Preserve the aspect ratio from the HTML width/height attributes.
+      const origW = Number(c.getAttribute("width")) || c.width;
+      const origH = Number(c.getAttribute("height")) || c.height;
+      const h = Math.max(50, Math.floor(w * (origH / origW)));
+      fitCanvas(c, w, h);
+    }
   }
   window.addEventListener("resize", setCanvasSize);
+  // Re-fit on DPR changes (user dragging window between monitors).
+  if (window.matchMedia) {
+    try {
+      const mq = window.matchMedia(`(resolution: ${DPR}dppx)`);
+      if (mq && mq.addEventListener) mq.addEventListener("change", setCanvasSize);
+    } catch (_) { /* older browsers */ }
+  }
   setCanvasSize();
 
   initCars();
