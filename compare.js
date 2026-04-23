@@ -10,15 +10,14 @@
     v0: 33, T: 1.5, a: 1.2, b: 1.5, s0: 2.0, delta: 4,
     carLength: 4.5,
     dtStep: 0.05,
-    speedMul: 2.0,
+    speedMul: 5.0,
     // Dimensionless multiplier applied to each model's paper-calibrated sigma.
     // noiseScale = 1.0 reproduces the posterior-mean values of Table 1 in
-    // arXiv:2307.03340 (AR & white) and arXiv:2210.03571 (GP). We default to 3x
-    // so dynamics are visible on a toy ring; set to 1 for paper fidelity.
-    noiseScale: 3.0,
-    ell: 1.4,
+    // arXiv:2307.03340 (AR & white) and arXiv:2210.03571 (GP).
+    noiseScale: 1.0,
+    ell: 1.6,
     kernel: "rbf",
-    arOrder: 2,
+    arOrder: 5,
   };
 
   // Posterior-mean sigmas from the calibration papers.

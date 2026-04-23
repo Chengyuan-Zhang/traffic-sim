@@ -41,12 +41,12 @@
       <input type="range" id="cmpRadius" min="60" max="250" value="120" step="5" />
     </div>
     <div class="control">
-      <label for="cmpScale">Noise scale (× paper σ): <span id="cmpScaleVal">3.0×</span></label>
-      <input type="range" id="cmpScale" min="0" max="8" value="3.0" step="0.5" />
+      <label for="cmpScale">Noise scale (× paper σ): <span id="cmpScaleVal">1.0×</span></label>
+      <input type="range" id="cmpScale" min="0" max="8" value="1.0" step="0.5" />
     </div>
     <div class="control">
-      <label for="cmpEll">ℓ — GP lengthscale (s): <span id="cmpEllVal">1.4</span></label>
-      <input type="range" id="cmpEll" min="0.1" max="5.0" value="1.4" step="0.1" />
+      <label for="cmpEll">ℓ — GP lengthscale (s): <span id="cmpEllVal">1.6</span></label>
+      <input type="range" id="cmpEll" min="0.1" max="5.0" value="1.6" step="0.1" />
     </div>
     <div class="control">
       <label for="cmpKernel">GP kernel</label>
@@ -61,17 +61,17 @@
       <label for="cmpAR">AR order p</label>
       <select id="cmpAR">
         <option value="1">p = 1</option>
-        <option value="2" selected>p = 2</option>
+        <option value="2">p = 2</option>
         <option value="3">p = 3</option>
         <option value="4">p = 4</option>
-        <option value="5">p = 5</option>
+        <option value="5" selected>p = 5</option>
         <option value="6">p = 6</option>
         <option value="7">p = 7</option>
       </select>
     </div>
     <div class="control">
-      <label for="cmpSpeed">Sim speed: <span id="cmpSpeedVal">2×</span></label>
-      <input type="range" id="cmpSpeed" min="0.5" max="10" value="2" step="0.5" />
+      <label for="cmpSpeed">Sim speed: <span id="cmpSpeedVal">5×</span></label>
+      <input type="range" id="cmpSpeed" min="0.5" max="10" value="5" step="0.5" />
     </div>
     <div class="buttons">
       <button id="cmpPerturb" type="button">Perturb all</button>
