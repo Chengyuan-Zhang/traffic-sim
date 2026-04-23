@@ -419,14 +419,23 @@ footer a { color: var(--accent); }
 .topnav-link.active { background: #1f2b39; color: var(--accent); }
 
 /* ================= Compare page ================= */
+.cmp-main {
+  display: block;
+  max-width: 1320px;
+  margin: 0 auto;
+  padding: 12px 20px 24px;
+}
+.cmp-main > header {
+  padding: 12px 8px 4px;
+}
 .cmp-controls {
-  max-width: 1080px;
-  margin: 12px auto 18px;
+  max-width: none;
+  margin: 12px 0 18px;
   padding: 14px 18px;
   background: var(--panel);
   border-radius: 10px;
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
   gap: 10px 18px;
   align-items: end;
 }
@@ -441,9 +450,9 @@ footer a { color: var(--accent); }
 .cmp-controls .hint { grid-column: 1 / -1; margin: 0; }
 
 .cmp-rings {
-  max-width: 1200px;
-  margin: 0 auto 18px;
-  padding: 0 18px;
+  max-width: none;
+  margin: 0 0 18px;
+  padding: 0;
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 16px;
@@ -457,7 +466,8 @@ footer a { color: var(--accent); }
 .cmp-ring canvas {
   width: 100%;
   height: auto;
-  max-width: 340px;
+  max-width: 320px;
+  aspect-ratio: 1 / 1;
   display: block;
   margin: 0 auto;
   background: #0b1118;
@@ -476,16 +486,24 @@ footer a { color: var(--accent); }
 .cmp-stats strong { color: var(--text); margin: 0 4px; }
 
 .cmp-charts {
-  max-width: 1200px;
-  margin: 0 auto 32px;
-  padding: 0 18px;
+  max-width: none;
+  margin: 0 0 32px;
+  padding: 0;
   display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
+}
+.cmp-charts .chart-card {
+  min-width: 0;
+}
+.cmp-charts .chart-card.chart-wide {
+  grid-column: 1 / -1;
 }
 .cmp-charts .chart-card canvas {
   width: 100%;
   height: auto;
   max-width: 100%;
+  display: block;
 }
 .chart-cap {
   color: var(--muted);
@@ -507,6 +525,9 @@ footer a { color: var(--accent); }
 .metrics-table td:first-child { text-align: left; color: var(--muted); }
 .metrics-table tbody tr:last-child td { border-bottom: none; }
 
+@media (max-width: 1000px) {
+  .cmp-charts { grid-template-columns: 1fr; }
+}
 @media (max-width: 800px) {
   .cmp-rings { grid-template-columns: 1fr; }
 }
