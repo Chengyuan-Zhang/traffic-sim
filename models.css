@@ -18,7 +18,7 @@
   --muted-body: #b4c2d4;
 }
 
-.mdl-wrap { max-width: 960px; margin: 0 auto; padding: 0 20px 40px; }
+.mdl-wrap { max-width: 1080px; margin: 0 auto; padding: 0 24px 40px; }
 
 /* Prose defaults */
 .mdl-prose p, .mdl-prose li {
@@ -42,12 +42,12 @@
   align-items: center;
   /* Raised breakpoint to 900 px with min-content-aware columns so the
      canvas does not crush against its row labels (review item 2.1). */
-  grid-template-columns: minmax(0, 1fr) minmax(300px, 420px);
+  grid-template-columns: minmax(0, 1fr) minmax(360px, 520px);
   padding: 8px 0 20px;
   border-bottom: 1px solid #243140;
   margin-bottom: 20px;
 }
-@media (max-width: 900px) { .mdl-hero { grid-template-columns: 1fr; } }
+@media (max-width: 960px) { .mdl-hero { grid-template-columns: 1fr; } }
 
 .mdl-hero h2 { margin: 0 0 10px; font-size: 1.35rem; color: var(--text); }
 .mdl-hero p  { margin: 0 0 10px; }
@@ -210,50 +210,76 @@
 }
 .mdl-paper .paper-meta a { color: var(--accent); }
 
-.mdl-paper-body {
-  display: grid; gap: 20px;
-  grid-template-columns: 1.6fr 1fr;
-  margin-top: 6px;
-}
-@media (max-width: 760px) { .mdl-paper-body { grid-template-columns: 1fr; } }
+/* Paper body: single column. Prose gets the full width so equations and
+   long sentences aren't cramped into a ~60% column. The "At a glance"
+   panel now lives as a horizontal strip of stat chips ABOVE the prose. */
+.mdl-paper-body { margin-top: 6px; }
 .mdl-paper-body p { margin: 6px 0; }
+.mdl-paper-body > p:first-child,
 .mdl-paper-body > div > p:first-child { margin-top: 0; }
 
-/* At-a-glance panel, toned down so it reads as metadata rather than
-   a second hero (review item 2.3). */
+/* At-a-glance stat strip: horizontal row of compact label/value chips,
+   sitting at the top of each paper card. Reads as metadata, wraps freely
+   on narrow screens, and leaves the prose column unconstrained. */
 .mdl-glance {
-  background: transparent;
+  background: #0f1a28;
   border: 1px solid #1c2a3a;
   border-radius: 8px;
-  padding: 12px 14px;
-  font-size: 0.88rem;
-  align-self: start;
+  padding: 10px 12px;
+  margin: 0 0 14px;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 10px 16px;
+  align-items: center;
 }
 .mdl-glance h4 {
-  margin: 0 0 8px;
-  font-size: 0.72rem;
-  letter-spacing: 0.1em;
+  margin: 0;
+  font-size: 0.68rem;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--muted-body);
-  font-weight: 600;
+  font-weight: 700;
+  padding-right: 12px;
+  border-right: 1px solid #1c2a3a;
+  white-space: nowrap;
 }
 .mdl-glance dl {
   margin: 0;
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 6px 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
 }
-.mdl-glance dt { color: var(--muted-body); font-size: 0.82rem; }
+.mdl-glance dl > div {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.mdl-glance dt {
+  color: var(--muted-body);
+  font-size: 0.7rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  line-height: 1.2;
+}
 .mdl-glance dd {
-  margin: 0;
+  margin: 2px 0 0;
   color: var(--text);
   font-variant-numeric: tabular-nums;
   font-size: 0.88rem;
+  line-height: 1.25;
 }
-/* Collapse to stacked rows on very narrow screens (review item 2.3). */
-@media (max-width: 480px) {
-  .mdl-glance dl { grid-template-columns: 1fr; gap: 2px; }
-  .mdl-glance dt { margin-top: 6px; }
+/* Accent the label rail per paper colour. */
+.mdl-paper.paper-gp    .mdl-glance h4 { color: var(--c-gp); }
+.mdl-paper.paper-ar    .mdl-glance h4 { color: var(--c-ar); }
+.mdl-paper.paper-white .mdl-glance h4 { color: var(--c-white); }
+
+@media (max-width: 640px) {
+  .mdl-glance { grid-template-columns: 1fr; }
+  .mdl-glance h4 {
+    border-right: none;
+    border-bottom: 1px solid #1c2a3a;
+    padding: 0 0 6px;
+  }
 }
 
 /* ---------- Comparison table + mobile pivot (review item 2.9) ---------- */

@@ -238,6 +238,17 @@
       </div>
 
       <div class="mdl-paper-body">
+        <aside class="mdl-glance" aria-label="MA-IDM at a glance">
+          <h4>At a glance</h4>
+          <dl>
+            <div><dt>Noise type</dt>         <dd>Continuous-time GP</dd></div>
+            <div><dt>Memory</dt>             <dd>Kernel \(\ell\)</dd></div>
+            <div><dt>Marginal std</dt>       <dd>\(\sigma_k\)</dd></div>
+            <div><dt>HighD \(\sigma_k\)</dt> <dd>≈ 0.202 m/s²</dd></div>
+            <div><dt>HighD \(\ell\)</dt>     <dd>≈ 1.44 s</dd></div>
+            <div><dt>Sampling</dt>           <dd>\(O(M)\) RFF</dd></div>
+          </dl>
+        </aside>
         <div>
           <p>
             <strong>Key idea.</strong> Model the residual \(\eta_n(t)\) as a
@@ -273,18 +284,6 @@
             target covariance.
           </p>
         </div>
-
-        <aside class="mdl-glance" aria-label="MA-IDM at a glance">
-          <h4>At a glance</h4>
-          <dl>
-            <dt>Noise type</dt>         <dd>Continuous-time GP</dd>
-            <dt>Memory</dt>             <dd>Kernel lengthscale \(\ell\)</dd>
-            <dt>Marginal std</dt>       <dd>\(\sigma_k\)</dd>
-            <dt>HighD \(\sigma_k\)</dt> <dd>≈ 0.202 m/s²</dd>
-            <dt>HighD \(\ell\)</dt>     <dd>≈ 1.44 s</dd>
-            <dt>Sampling cost</dt>      <dd>\(O(M)\) via RFF</dd>
-          </dl>
-        </aside>
       </div>
     </article>
 
@@ -308,6 +307,17 @@
       </div>
 
       <div class="mdl-paper-body">
+        <aside class="mdl-glance" aria-label="DR-IDM at a glance">
+          <h4>At a glance</h4>
+          <dl>
+            <div><dt>Noise type</dt>     <dd>Discrete AR(p)</dd></div>
+            <div><dt>Memory</dt>         <dd>Roots of \(1-\sum\rho_i z^{-i}\)</dd></div>
+            <div><dt>Marginal std</dt>   <dd>\(\sigma_\varepsilon / \sqrt{1-\ldots}\)</dd></div>
+            <div><dt>Orders fit</dt>     <dd>\(p=1,\ldots,7\)</dd></div>
+            <div><dt>Selection</dt>      <dd>DIC / WAIC</dd></div>
+            <div><dt>Sampling</dt>       <dd>\(O(p)\) per step</dd></div>
+          </dl>
+        </aside>
         <div>
           <p>
             <strong>Key idea.</strong> Instead of a continuous-time GP, assume
@@ -348,18 +358,6 @@
             fit — attractive for real-time or online calibration.
           </p>
         </div>
-
-        <aside class="mdl-glance" aria-label="DR-IDM at a glance">
-          <h4>At a glance</h4>
-          <dl>
-            <dt>Noise type</dt>     <dd>Discrete-time AR(p)</dd>
-            <dt>Memory</dt>         <dd>Roots of \(1-\sum\rho_i z^{-i}\)</dd>
-            <dt>Marginal std</dt>   <dd>\(\sigma_\varepsilon / \sqrt{1-\ldots}\)</dd>
-            <dt>Orders fit</dt>     <dd>\(p=1,\ldots,7\)</dd>
-            <dt>Selection</dt>      <dd>DIC / WAIC</dd>
-            <dt>Sampling cost</dt>  <dd>\(O(p)\) per step</dd>
-          </dl>
-        </aside>
       </div>
     </article>
 
@@ -379,6 +377,15 @@
       <div class="paper-meta">The classical Bayesian IDM likelihood.</div>
 
       <div class="mdl-paper-body">
+        <aside class="mdl-glance" aria-label="B-IDM at a glance">
+          <h4>At a glance</h4>
+          <dl>
+            <div><dt>Noise type</dt>   <dd>I.i.d. Gaussian</dd></div>
+            <div><dt>Memory</dt>       <dd>None (τ=0)</dd></div>
+            <div><dt>Marginal std</dt> <dd>\(\sigma\)</dd></div>
+            <div><dt>Macro effect</dt> <dd>Jitter, no waves</dd></div>
+          </dl>
+        </aside>
         <div>
           <p>
             What falls out of a naive least-squares or Gaussian-likelihood
@@ -396,15 +403,6 @@
             the two correlated models above are designed to fix.
           </p>
         </div>
-        <aside class="mdl-glance" aria-label="B-IDM at a glance">
-          <h4>At a glance</h4>
-          <dl>
-            <dt>Noise type</dt>   <dd>I.i.d. Gaussian</dd>
-            <dt>Memory</dt>       <dd>None (τ=0)</dd>
-            <dt>Marginal std</dt> <dd>\(\sigma\)</dd>
-            <dt>Macro effect</dt> <dd>Jitter, no waves</dd>
-          </dl>
-        </aside>
       </div>
     </article>
 
