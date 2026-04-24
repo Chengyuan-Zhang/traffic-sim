@@ -18,7 +18,7 @@
   --muted-body: #b4c2d4;
 }
 
-.mdl-wrap { max-width: 1100px; margin: 0 auto; padding: 0 20px 40px; }
+.mdl-wrap { max-width: 960px; margin: 0 auto; padding: 0 20px 40px; }
 
 /* Prose defaults */
 .mdl-prose p, .mdl-prose li {
@@ -38,16 +38,16 @@
 /* ---------- Hero ---------- */
 .mdl-hero {
   display: grid;
-  gap: 28px;
+  gap: 24px;
   align-items: center;
-  /* Raised breakpoint to 960 px and min-content-aware columns so the canvas
-     doesn't squeeze against its row labels (review item 2.1). */
-  grid-template-columns: minmax(0, 1.1fr) minmax(320px, 1fr);
-  padding: 20px 0 24px;
+  /* Raised breakpoint to 900 px with min-content-aware columns so the
+     canvas does not crush against its row labels (review item 2.1). */
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 420px);
+  padding: 8px 0 20px;
   border-bottom: 1px solid #243140;
-  margin-bottom: 28px;
+  margin-bottom: 20px;
 }
-@media (max-width: 960px) { .mdl-hero { grid-template-columns: 1fr; } }
+@media (max-width: 900px) { .mdl-hero { grid-template-columns: 1fr; } }
 
 .mdl-hero h2 { margin: 0 0 10px; font-size: 1.35rem; color: var(--text); }
 .mdl-hero p  { margin: 0 0 10px; }
@@ -96,9 +96,9 @@
 /* ---------- Section headings ---------- */
 .mdl-sec-title {
   display: flex;
-  align-items: center;
+  align-items: baseline;
   gap: 12px;
-  margin: 36px 0 14px;
+  margin: 32px 0 12px;
   padding-bottom: 8px;
   border-bottom: 1px solid #243140;
 }
@@ -107,14 +107,16 @@
   font-variant-numeric: tabular-nums;
   font-weight: 600;
   color: var(--muted);
-  font-size: 0.75rem;
+  font-size: 0.72rem;
   letter-spacing: 0.12em;
   padding: 2px 7px;
   border: 1px solid #243140;
   border-radius: 4px;
   background: #0f1a28;
+  position: relative;
+  top: -2px;                /* optical alignment with h2 baseline */
 }
-.mdl-sec-title h2 { margin: 0; font-size: 1.35rem; }
+.mdl-sec-title h2 { margin: 0; font-size: 1.2rem; color: var(--text); }
 
 /* ---------- Motivation tiles ---------- */
 .mdl-motivate {
@@ -143,24 +145,24 @@
 
 /* ---------- IDM equation banner ---------- */
 .mdl-eq-banner {
-  margin: 18px 0;
-  padding: 18px 22px;
+  margin: 16px 0;
+  padding: 14px 20px;
   background: linear-gradient(180deg, #132030 0%, #111a24 100%);
   border: 1px solid #243140;
-  border-radius: 12px;
+  border-radius: 10px;
   overflow-x: auto;
-  /* Reserve vertical space so async MathJax typesetting does not cause
-     a layout jump above the fold (review item 1.6). */
-  min-height: 5.5em;
-  display: flex; flex-direction: column; justify-content: center;
+  /* Reserve just enough vertical space that async MathJax typesetting
+     doesn't cause a layout jump (review item 1.6) — but not so much that
+     short equations float in a sea of empty space. */
+  min-height: 3.2em;
 }
-.mdl-eq-banner.eq-tall { min-height: 7em; }
+.mdl-eq-banner.eq-tall { min-height: 4.8em; }
 .mdl-eq-banner .eq-label {
-  font-size: 0.78rem;
+  font-size: 0.74rem;
   color: var(--muted-body);
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  margin-bottom: 6px;
+  margin-bottom: 4px;
 }
 
 /* ---------- Paper cards ---------- */
@@ -168,9 +170,9 @@
   position: relative;
   background: #111a24;
   border: 1px solid #243140;
-  border-radius: 12px;
-  padding: 20px 22px 18px;
-  margin: 18px 0;
+  border-radius: 10px;
+  padding: 16px 20px 14px 24px;
+  margin: 14px 0;
   overflow: hidden;
 }
 .mdl-paper::before {
@@ -209,11 +211,13 @@
 .mdl-paper .paper-meta a { color: var(--accent); }
 
 .mdl-paper-body {
-  display: grid; gap: 18px;
-  grid-template-columns: 1.4fr 1fr;
+  display: grid; gap: 20px;
+  grid-template-columns: 1.6fr 1fr;
+  margin-top: 6px;
 }
-@media (max-width: 820px) { .mdl-paper-body { grid-template-columns: 1fr; } }
-.mdl-paper-body p { margin: 8px 0; }
+@media (max-width: 760px) { .mdl-paper-body { grid-template-columns: 1fr; } }
+.mdl-paper-body p { margin: 6px 0; }
+.mdl-paper-body > div > p:first-child { margin-top: 0; }
 
 /* At-a-glance panel, toned down so it reads as metadata rather than
    a second hero (review item 2.3). */
@@ -269,21 +273,31 @@
   vertical-align: top;
   text-align: left;
 }
-.mdl-table th {
+/* Column-header row (inside <thead>) keeps the dark top strip. */
+.mdl-table thead th {
   background: #0f1a28;
   color: var(--text);
   font-weight: 600;
   font-size: 0.86rem;
 }
-.mdl-table td:first-child,
-.mdl-table th:first-child { color: var(--muted-body); width: 25%; }
-.mdl-table tr:last-child td { border-bottom: none; }
+/* Row-label cells (<th scope="row"> in <tbody>) look like muted labels,
+   not like repeated column headers. */
+.mdl-table tbody th {
+  background: transparent;
+  color: var(--muted-body);
+  font-weight: 500;
+  font-size: 0.88rem;
+  width: 26%;
+}
+.mdl-table tr:last-child td,
+.mdl-table tr:last-child th { border-bottom: none; }
 .mdl-table .col-white { border-top: 2px solid var(--c-white); }
 .mdl-table .col-ar    { border-top: 2px solid var(--c-ar); }
 .mdl-table .col-gp    { border-top: 2px solid var(--c-gp); }
 
-/* Below 640 px, pivot the table: each model becomes a stacked card with
-   the row-label shown via data-label, per review recommendation 2.9. */
+/* Below 640 px: collapse the table to stacked cards. Each <tr> becomes
+   a card whose first (<th scope="row">) cell is the attribute name, and
+   the three <td>s list the model values with data-label prefixes. */
 @media (max-width: 640px) {
   .mdl-table-wrap { overflow-x: visible; }
   .mdl-table, .mdl-table thead, .mdl-table tbody,
@@ -294,17 +308,23 @@
     background: #111a24;
     border: 1px solid #243140;
     border-radius: 10px;
-    padding: 10px 14px;
+    padding: 12px 14px;
     margin-bottom: 12px;
   }
-  .mdl-table tr.pivot-white { border-top: 3px solid var(--c-white); }
-  .mdl-table tr.pivot-ar    { border-top: 3px solid var(--c-ar); }
-  .mdl-table tr.pivot-gp    { border-top: 3px solid var(--c-gp); }
+  .mdl-table tbody th {
+    width: auto;
+    font-weight: 600;
+    font-size: 0.95rem;
+    color: var(--text);
+    padding: 0 0 8px;
+    margin-bottom: 6px;
+    border-bottom: 1px solid #1c2a3a;
+  }
   .mdl-table td {
     border: none;
     padding: 6px 0;
     display: grid;
-    grid-template-columns: 42% 1fr;
+    grid-template-columns: 40% 1fr;
     gap: 10px;
     font-size: 0.88rem;
   }
@@ -315,16 +335,6 @@
     letter-spacing: 0.04em;
     text-transform: uppercase;
   }
-  .mdl-table td.pivot-title {
-    grid-template-columns: 1fr;
-    font-weight: 600;
-    font-size: 1rem;
-    color: var(--text);
-    padding-bottom: 8px;
-    border-bottom: 1px solid #1c2a3a;
-    margin-bottom: 6px;
-  }
-  .mdl-table td.pivot-title::before { display: none; }
 }
 
 /* ---------- CTA ---------- */
