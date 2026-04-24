@@ -19,219 +19,24 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='22' fill='none' stroke='%234fc3f7' stroke-width='8'/%3E%3Ccircle cx='32' cy='10' r='5' fill='%23ffb74d'/%3E%3Ccircle cx='54' cy='32' r='5' fill='%2381c784'/%3E%3C/svg%3E" />
 <link rel="preconnect" href="https://arxiv.org" />
 <link rel="preconnect" href="https://doi.org" />
-<link rel="preconnect" href="https://cdn.jsdelivr.net" />
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
+<!-- Preload the MathJax bundle — equations are half this page's value,
+     so prioritise them (review item 4.1). -->
+<link rel="preload" as="script" crossorigin
+      href="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js" />
 <link rel="stylesheet" href="styles.css" />
-<style>
-  /* ---------- Page-local design system for the models page. ---------- */
-  /* Model accent colours — kept in sync with compare.html / compare.js. */
-  :root {
-    --c-white: #ff7675;   /* B-IDM      (white noise)        */
-    --c-ar:    #74b9ff;   /* DR-IDM     (AR(p) noise)        */
-    --c-gp:    #55efc4;   /* MA-IDM     (Gaussian process)   */
-  }
-
-  .mdl-wrap { max-width: 1100px; margin: 0 auto; padding: 0 20px 40px; }
-
-  /* ---------- Hero ---------- */
-  .mdl-hero {
-    display: grid; gap: 28px; align-items: center;
-    grid-template-columns: 1.1fr 1fr;
-    padding: 20px 0 24px;
-    border-bottom: 1px solid #243140;
-    margin-bottom: 28px;
-  }
-  @media (max-width: 820px) { .mdl-hero { grid-template-columns: 1fr; } }
-  .mdl-hero h2 { margin: 0 0 10px; font-size: 1.35rem; color: var(--text); }
-  .mdl-hero p  { color: var(--muted); line-height: 1.6; margin: 0 0 10px; }
-  .mdl-hero .legend-row {
-    display: flex; gap: 14px; flex-wrap: wrap; margin-top: 14px;
-    font-size: 0.82rem; color: var(--muted);
-  }
-  .mdl-hero .legend-row b { color: var(--text); font-weight: 600; }
-  .legend-swatch {
-    display: inline-block; width: 14px; height: 3px; border-radius: 2px;
-    vertical-align: middle; margin-right: 6px;
-  }
-  .mdl-hero-fig {
-    background: #111a24; border: 1px solid #243140; border-radius: 12px;
-    padding: 10px; position: relative;
-  }
-  .mdl-hero-fig canvas { width: 100%; height: 260px; display: block; }
-  .mdl-hero-fig figcaption {
-    font-size: 0.78rem; color: var(--muted); padding: 6px 6px 2px;
-    text-align: center;
-  }
-
-  /* ---------- Section headings ---------- */
-  .mdl-sec-title {
-    display: flex; align-items: baseline; gap: 12px;
-    margin: 36px 0 14px;
-    padding-bottom: 8px;
-    border-bottom: 1px solid #243140;
-  }
-  .mdl-sec-title .num {
-    font-variant-numeric: tabular-nums;
-    font-weight: 700; color: var(--accent);
-    font-size: 0.92rem; letter-spacing: 0.05em;
-  }
-  .mdl-sec-title h2 { margin: 0; font-size: 1.35rem; }
-
-  /* ---------- Generic prose ---------- */
-  .mdl-prose p, .mdl-prose li { line-height: 1.65; font-size: 0.96rem; }
-  .mdl-prose code {
-    background: #0b1220; border: 1px solid #1c2a3a;
-    padding: 1px 5px; border-radius: 4px; font-size: 0.88em;
-  }
-
-  /* ---------- Motivation: two-column “problem / solution” ---------- */
-  .mdl-motivate {
-    display: grid; gap: 16px;
-    grid-template-columns: 1fr 1fr;
-  }
-  @media (max-width: 820px) { .mdl-motivate { grid-template-columns: 1fr; } }
-  .mdl-tile {
-    background: #111a24; border: 1px solid #243140; border-radius: 10px;
-    padding: 16px 18px;
-  }
-  .mdl-tile h3 {
-    margin: 0 0 8px; font-size: 1rem; color: var(--accent-2);
-    display: flex; align-items: center; gap: 8px;
-  }
-  .mdl-tile .icon {
-    display: inline-flex; align-items: center; justify-content: center;
-    width: 26px; height: 26px; border-radius: 6px;
-    background: #1a2635; color: var(--accent-2); font-weight: 700;
-  }
-  .mdl-tile p { margin: 6px 0; color: var(--muted); font-size: 0.92rem; }
-
-  /* ---------- IDM equation banner ---------- */
-  .mdl-eq-banner {
-    margin: 18px 0;
-    padding: 18px 22px;
-    background: linear-gradient(180deg, #132030 0%, #111a24 100%);
-    border: 1px solid #243140; border-radius: 12px;
-    overflow-x: auto;
-  }
-  .mdl-eq-banner .eq-label {
-    font-size: 0.78rem; color: var(--muted); letter-spacing: 0.08em;
-    text-transform: uppercase; margin-bottom: 6px;
-  }
-
-  /* ---------- Paper / model cards ---------- */
-  .mdl-paper {
-    position: relative;
-    background: #111a24; border: 1px solid #243140; border-radius: 12px;
-    padding: 20px 22px 18px; margin: 18px 0;
-    overflow: hidden;
-  }
-  .mdl-paper::before {
-    content: ""; position: absolute; left: 0; top: 0; bottom: 0;
-    width: 4px; background: var(--accent);
-  }
-  .mdl-paper.paper-gp::before    { background: var(--c-gp); }
-  .mdl-paper.paper-ar::before    { background: var(--c-ar); }
-  .mdl-paper.paper-white::before { background: var(--c-white); }
-
-  .mdl-paper .paper-head {
-    display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap;
-    margin-bottom: 4px;
-  }
-  .mdl-paper .pill {
-    font-size: 0.72rem; letter-spacing: 0.06em; text-transform: uppercase;
-    padding: 3px 8px; border-radius: 999px;
-    background: #0b1220; border: 1px solid #243140;
-    font-weight: 700; font-variant-numeric: tabular-nums;
-  }
-  .mdl-paper.paper-gp    .pill { color: var(--c-gp);    border-color: rgba(85,239,196,0.35); }
-  .mdl-paper.paper-ar    .pill { color: var(--c-ar);    border-color: rgba(116,185,255,0.35); }
-  .mdl-paper.paper-white .pill { color: var(--c-white); border-color: rgba(255,118,117,0.35); }
-  .mdl-paper h3 { margin: 0; font-size: 1.1rem; color: var(--text); }
-  .mdl-paper .paper-meta {
-    font-size: 0.82rem; color: var(--muted); margin: 2px 0 12px;
-  }
-  .mdl-paper .paper-meta a { color: var(--accent); }
-
-  /* Two-column layout inside a paper card: prose on the left, "at a glance" on the right. */
-  .mdl-paper-body {
-    display: grid; gap: 18px;
-    grid-template-columns: 1.4fr 1fr;
-  }
-  @media (max-width: 820px) { .mdl-paper-body { grid-template-columns: 1fr; } }
-  .mdl-paper-body p { margin: 8px 0; }
-
-  .mdl-glance {
-    background: #0b1220; border: 1px solid #1c2a3a; border-radius: 10px;
-    padding: 12px 14px; font-size: 0.88rem;
-  }
-  .mdl-glance h4 {
-    margin: 0 0 8px; font-size: 0.78rem; letter-spacing: 0.08em;
-    text-transform: uppercase; color: var(--muted);
-  }
-  .mdl-glance dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 4px 10px; }
-  .mdl-glance dt { color: var(--muted); font-size: 0.82rem; }
-  .mdl-glance dd {
-    margin: 0; color: var(--text); font-variant-numeric: tabular-nums;
-    font-size: 0.88rem;
-  }
-  .mdl-glance .eq-mini {
-    background: #0f1a28; border: 1px solid #1c2a3a; border-radius: 6px;
-    padding: 8px 10px; margin-top: 10px;
-    font-size: 0.92rem; overflow-x: auto;
-  }
-
-  /* ---------- Comparison table ---------- */
-  .mdl-table-wrap { overflow-x: auto; margin: 10px 0 4px; }
-  .mdl-table {
-    width: 100%; border-collapse: collapse;
-    background: #111a24; border: 1px solid #243140; border-radius: 10px;
-    overflow: hidden; font-size: 0.9rem;
-  }
-  .mdl-table th, .mdl-table td {
-    padding: 10px 12px; border-bottom: 1px solid #1c2a3a;
-    vertical-align: top; text-align: left;
-  }
-  .mdl-table th {
-    background: #0f1a28; color: var(--text); font-weight: 600;
-    font-size: 0.86rem;
-  }
-  .mdl-table td:first-child { color: var(--muted); width: 25%; }
-  .mdl-table tr:last-child td { border-bottom: none; }
-  .mdl-table .col-white { border-top: 2px solid var(--c-white); }
-  .mdl-table .col-ar    { border-top: 2px solid var(--c-ar); }
-  .mdl-table .col-gp    { border-top: 2px solid var(--c-gp); }
-
-  /* ---------- CTA row ---------- */
-  .mdl-cta {
-    display: grid; gap: 12px;
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-    margin: 22px 0 10px;
-  }
-  .mdl-cta a {
-    display: block;
-    padding: 14px 16px;
-    background: #111a24; border: 1px solid #243140; border-radius: 10px;
-    color: var(--text); text-decoration: none;
-    transition: background 120ms ease, border-color 120ms ease, transform 120ms ease;
-  }
-  .mdl-cta a:hover {
-    background: #16222f; border-color: #33475e; transform: translateY(-1px);
-  }
-  .mdl-cta a .cta-kicker {
-    display: block; font-size: 0.72rem; letter-spacing: 0.08em;
-    text-transform: uppercase; color: var(--accent); margin-bottom: 4px;
-  }
-  .mdl-cta a .cta-title { font-weight: 600; }
-  .mdl-cta a .cta-sub   { display: block; color: var(--muted); font-size: 0.84rem; margin-top: 2px; }
-
-  /* ---------- Citation block ---------- */
-  .mdl-refs { padding-left: 22px; font-size: 0.9rem; line-height: 1.6; }
-  .mdl-refs li { margin-bottom: 10px; color: var(--muted); }
-  .mdl-refs li em { color: var(--text); }
-  .mdl-refs a { color: var(--accent); }
-
-  /* MathJax equations can overflow on narrow screens — allow horizontal scroll. */
-  mjx-container { overflow-x: auto; overflow-y: hidden; max-width: 100%; }
-</style>
+<link rel="stylesheet" href="models.css" />
+<!-- MathJax config + async loader. Using head + defer avoids the anti-
+     pattern of <script defer> at end-of-body (review item 3.5). -->
+<script>
+  window.MathJax = {
+    tex: { inlineMath: [['\\(', '\\)']], displayMath: [['\\[', '\\]']] },
+    svg: { fontCache: 'global' }
+  };
+</script>
+<script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
+<script defer src="page.js"></script>
+<script defer src="models.js"></script>
 </head>
 <body>
   <nav class="topnav" aria-label="Primary">
@@ -271,20 +76,60 @@
           persistent stop-and-go waves you see in real highway data.
         </p>
         <p>
-          This page explains the two Bayesian models the simulator is built on,
-          and why they produce qualitatively different jam dynamics from the
-          white-noise baseline.
+          This page explains the two Bayesian models the simulator is built
+          on, and why they produce qualitatively different jam dynamics from
+          the white-noise baseline.
         </p>
-        <div class="legend-row" aria-hidden="true">
-          <span><span class="legend-swatch" style="background:var(--c-white)"></span><b>White</b> — B-IDM (i.i.d.)</span>
-          <span><span class="legend-swatch" style="background:var(--c-ar)"></span><b>AR(p)</b> — DR-IDM</span>
-          <span><span class="legend-swatch" style="background:var(--c-gp)"></span><b>GP</b> — MA-IDM</span>
+        <div class="legend-row">
+          <span><span class="legend-swatch" style="background:var(--c-white)" aria-hidden="true"></span><b>White</b> — B-IDM (i.i.d.)</span>
+          <span><span class="legend-swatch" style="background:var(--c-ar)" aria-hidden="true"></span><b>AR(p)</b> — DR-IDM</span>
+          <span><span class="legend-swatch" style="background:var(--c-gp)" aria-hidden="true"></span><b>GP</b> — MA-IDM</span>
         </div>
       </div>
       <figure class="mdl-hero-fig">
-        <canvas id="noiseFig" width="520" height="260"
-                aria-label="Three sample trajectories of driver-noise residuals: white, AR(1), and a smooth Gaussian-process realisation."></canvas>
-        <figcaption>
+        <div class="fig-viewport">
+          <!-- Static SVG fallback so there is *something* to see with JS
+               disabled / blocked (review item 1.2). Three stylised traces
+               with the same marginal variance but different smoothness. -->
+          <svg class="fig-fallback" viewBox="0 0 520 260"
+               preserveAspectRatio="xMidYMid meet" aria-hidden="true"
+               xmlns="http://www.w3.org/2000/svg">
+            <rect width="520" height="260" fill="#0f1a28" />
+            <!-- Lane midlines -->
+            <g stroke="#2f4258" stroke-dasharray="2 4" stroke-width="1">
+              <line x1="54" y1="45"  x2="502" y2="45" />
+              <line x1="54" y1="130" x2="502" y2="130" />
+              <line x1="54" y1="215" x2="502" y2="215" />
+            </g>
+            <!-- Row labels -->
+            <g font-family="-apple-system, Segoe UI, Roboto, sans-serif"
+               font-size="11" font-weight="600">
+              <text x="10" y="48"  fill="#ff7675">White</text>
+              <text x="10" y="133" fill="#74b9ff">AR(1)</text>
+              <text x="10" y="218" fill="#55efc4">GP</text>
+            </g>
+            <!-- White: jagged high-frequency trace -->
+            <polyline fill="none" stroke="#ff7675" stroke-width="1.3"
+              points="54,45 70,25 82,60 96,30 112,58 126,35 140,52 156,22 170,60 186,40 200,55 216,30 232,58 246,38 262,55 276,28 290,60 306,35 320,55 336,30 350,58 366,40 380,52 396,28 412,58 428,38 442,55 458,30 472,60 486,35 500,50" />
+            <!-- AR(1): medium smoothness -->
+            <path d="M54 130 C 80 100, 110 160, 150 115 S 210 155, 260 110
+                     S 330 160, 380 120 S 450 155, 502 125"
+                  fill="none" stroke="#74b9ff" stroke-width="1.5" />
+            <!-- GP: smooth low-frequency trace -->
+            <path d="M54 215 C 120 175, 180 250, 260 205
+                     S 410 180, 502 220"
+                  fill="none" stroke="#55efc4" stroke-width="1.8" />
+            <!-- time axis hint -->
+            <text x="502" y="257" fill="#b4c2d4" font-size="10"
+                  text-anchor="end"
+                  font-family="-apple-system, Segoe UI, Roboto, sans-serif">time →</text>
+          </svg>
+          <canvas id="noiseFig" width="520" height="260"
+                  aria-describedby="heroFigCaption"
+                  aria-label="Sample residual-noise trajectories for three models.">
+          </canvas>
+        </div>
+        <figcaption id="heroFigCaption">
           Sample realisations of \(\eta(t)\) for each noise model — same
           marginal variance, very different temporal structure.
         </figcaption>
@@ -299,7 +144,7 @@
       <h2>Motivation — why stochastic car-following?</h2>
     </div>
 
-    <p class="subtitle" style="text-align:left; max-width:none; margin:0 0 14px;">
+    <p>
       Deterministic car-following models are elegant, parsimonious, and capture
       the first-order dynamics of traffic flow very well. But real trajectory
       data — HighD, NGSIM, any modern drone survey — looks nothing like a
@@ -343,7 +188,7 @@
       <a href="https://doi.org/10.1103/PhysRevE.62.1805" target="_blank" rel="noopener noreferrer">Treiber, Hennecke &amp; Helbing (2000)</a>:
     </p>
 
-    <div class="mdl-eq-banner">
+    <div class="mdl-eq-banner eq-tall">
       <div class="eq-label">IDM acceleration</div>
       \[
         \dot v_n \;=\; a\!\left[1 - \left(\frac{v_n}{v_0}\right)^{\delta}
@@ -439,9 +284,6 @@
             <dt>HighD \(\ell\)</dt>     <dd>≈ 1.44 s</dd>
             <dt>Sampling cost</dt>      <dd>\(O(M)\) via RFF</dd>
           </dl>
-          <div class="eq-mini">
-            \(k(\tau) = \sigma_k^2\,\kappa(|\tau|/\ell)\)
-          </div>
         </aside>
       </div>
     </article>
@@ -517,9 +359,6 @@
             <dt>Selection</dt>      <dd>DIC / WAIC</dd>
             <dt>Sampling cost</dt>  <dd>\(O(p)\) per step</dd>
           </dl>
-          <div class="eq-mini">
-            \(\eta_t = \sum_i \rho_i\,\eta_{t-i} + \varepsilon_t\)
-          </div>
         </aside>
       </div>
     </article>
@@ -574,9 +413,11 @@
     <!-- ============================================================ -->
     <div class="mdl-sec-title">
       <span class="num">06</span>
-      <h2>At a glance — three models, side by side</h2>
+      <h2>Side by side</h2>
     </div>
 
+    <!-- Rows carry per-model pivot classes + per-cell data-label so the
+         table can collapse to stacked cards below 640 px (item 2.9). -->
     <div class="mdl-table-wrap">
       <table class="mdl-table">
         <thead>
@@ -589,40 +430,40 @@
         </thead>
         <tbody>
           <tr>
-            <td>Residual process</td>
-            <td>\(\eta_t \sim \mathcal N(0,\sigma^2)\), i.i.d.</td>
-            <td>\(\eta_t=\sum_i\rho_i\eta_{t-i}+\varepsilon_t\)</td>
-            <td>\(\eta(t)\sim\mathcal{GP}(0,k(\tau))\)</td>
+            <th scope="row">Residual process</th>
+            <td data-label="B-IDM">\(\eta_t \sim \mathcal N(0,\sigma^2)\), i.i.d.</td>
+            <td data-label="DR-IDM">\(\eta_t=\sum_i\rho_i\eta_{t-i}+\varepsilon_t\)</td>
+            <td data-label="MA-IDM">\(\eta(t)\sim\mathcal{GP}(0,k(\tau))\)</td>
           </tr>
           <tr>
-            <td>Memory</td>
-            <td>None</td>
-            <td>Roots of char. poly.</td>
-            <td>Kernel lengthscale \(\ell\)</td>
+            <th scope="row">Memory</th>
+            <td data-label="B-IDM">None</td>
+            <td data-label="DR-IDM">Roots of char. poly.</td>
+            <td data-label="MA-IDM">Kernel lengthscale \(\ell\)</td>
           </tr>
           <tr>
-            <td>Free parameters</td>
-            <td>\(\sigma\)</td>
-            <td>\(\sigma_\varepsilon\), \(\rho_1,\ldots,\rho_p\)</td>
-            <td>\(\sigma_k\), \(\ell\), kernel family</td>
+            <th scope="row">Free parameters</th>
+            <td data-label="B-IDM">\(\sigma\)</td>
+            <td data-label="DR-IDM">\(\sigma_\varepsilon\), \(\rho_1,\ldots,\rho_p\)</td>
+            <td data-label="MA-IDM">\(\sigma_k\), \(\ell\), kernel family</td>
           </tr>
           <tr>
-            <td>Cost per step</td>
-            <td>\(O(1)\)</td>
-            <td>\(O(p)\)</td>
-            <td>\(O(M)\) (random Fourier features)</td>
+            <th scope="row">Cost per step</th>
+            <td data-label="B-IDM">\(O(1)\)</td>
+            <td data-label="DR-IDM">\(O(p)\)</td>
+            <td data-label="MA-IDM">\(O(M)\) (random Fourier features)</td>
           </tr>
           <tr>
-            <td>Macro signature</td>
-            <td>Fine jitter, no persistent waves</td>
-            <td>Persistent waves, mild FD hysteresis</td>
-            <td>Persistent waves, clearest FD hysteresis</td>
+            <th scope="row">Macro signature</th>
+            <td data-label="B-IDM">Fine jitter, no persistent waves</td>
+            <td data-label="DR-IDM">Persistent waves, mild FD hysteresis</td>
+            <td data-label="MA-IDM">Persistent waves, clearest FD hysteresis</td>
           </tr>
           <tr>
-            <td>Reference</td>
-            <td>Bayesian IDM baseline</td>
-            <td><a href="https://arxiv.org/abs/2307.03340" target="_blank" rel="noopener noreferrer">arXiv:2307.03340</a></td>
-            <td><a href="https://arxiv.org/abs/2210.03571" target="_blank" rel="noopener noreferrer">arXiv:2210.03571</a></td>
+            <th scope="row">Reference</th>
+            <td data-label="B-IDM">Bayesian IDM baseline</td>
+            <td data-label="DR-IDM"><a href="https://arxiv.org/abs/2307.03340" target="_blank" rel="noopener noreferrer">arXiv:2307.03340</a></td>
+            <td data-label="MA-IDM"><a href="https://arxiv.org/abs/2210.03571" target="_blank" rel="noopener noreferrer">arXiv:2210.03571</a></td>
           </tr>
         </tbody>
       </table>
@@ -684,189 +525,37 @@
       </li>
     </ol>
 
+    <details class="mdl-bibtex">
+      <summary>BibTeX <button type="button" id="copyBibtex" class="copy-btn" aria-label="Copy BibTeX citations to clipboard">Copy</button></summary>
+<pre id="bibtexBlock">@article{zhang2024maidm,
+  title   = {Bayesian Calibration of the Intelligent Driver Model},
+  author  = {Zhang, Chengyuan and Sun, Lijun},
+  journal = {IEEE Transactions on Intelligent Transportation Systems},
+  year    = {2024},
+  doi     = {10.1109/TITS.2024.3354102}
+}
+
+@article{zhang2024dynamicidm,
+  title   = {Calibrating Car-Following Models via Bayesian Dynamic Regression},
+  author  = {Zhang, Chengyuan and Wang, Wenshuo and Sun, Lijun},
+  journal = {Transportation Research Part C: Emerging Technologies},
+  year    = {2024},
+  pages   = {104719},
+  doi     = {10.1016/j.trc.2024.104719}
+}</pre>
+    </details>
+
   </main>
 
   <footer>
     <p>Source on <a href="https://github.com/Chengyuan-Zhang/traffic-sim" target="_blank" rel="noopener noreferrer">GitHub</a>.</p>
     <p class="view-counter">
       <img src="https://api.visitorbadge.io/api/combined?path=https%3A%2F%2Fchengyuan-zhang.github.io%2Ftraffic-sim%2F&label=views+%2F+unique+visitors&labelColor=%231f2937&countColor=%234fc3f7&style=flat"
-           alt="Page views / unique visitors" loading="lazy" decoding="async" height="20"
+           alt="Page views / unique visitors"
+           loading="lazy" decoding="async" height="20"
+           referrerpolicy="no-referrer"
            onerror="this.style.display='none'" />
     </p>
   </footer>
-
-  <!-- MathJax (equations). Async-loaded; page stays readable if CDN is blocked. -->
-  <script>
-    window.MathJax = {
-      tex: { inlineMath: [['\\(', '\\)']], displayMath: [['\\[', '\\]']] },
-      svg: { fontCache: 'global' }
-    };
-  </script>
-  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js" async></script>
-
-  <!--
-    Hero figure: three sample noise traces (white, AR(1), smooth GP). All
-    three are scaled to the same marginal standard deviation so the eye
-    compares temporal structure, not amplitude. A fixed seed keeps the
-    figure reproducible across reloads.
-  -->
-  <script>
-    (function () {
-      const cvs = document.getElementById('noiseFig');
-      if (!cvs) return;
-      const ctx = cvs.getContext('2d');
-
-      // ---- Simple seeded PRNG (mulberry32) for a reproducible figure. ----
-      function mulberry32(seed) {
-        return function () {
-          let t = (seed += 0x6D2B79F5);
-          t = Math.imul(t ^ (t >>> 15), t | 1);
-          t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-          return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-        };
-      }
-      function gauss(rng) {
-        // Box–Muller: two uniforms → one standard normal.
-        let u = 0, v = 0;
-        while (u === 0) u = rng();
-        while (v === 0) v = rng();
-        return Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2 * Math.PI * v);
-      }
-
-      const N = 400;              // samples per trace
-      const rng = mulberry32(7);  // fixed seed
-
-      // White noise: N(0, 1).
-      const white = new Array(N);
-      for (let i = 0; i < N; i++) white[i] = gauss(rng);
-
-      // AR(1) with φ=0.9 → lag-1 correlation of 0.9, scaled to unit variance.
-      const phi = 0.9, sE = Math.sqrt(1 - phi * phi);
-      const ar = new Array(N);
-      ar[0] = gauss(rng);
-      for (let i = 1; i < N; i++) ar[i] = phi * ar[i - 1] + sE * gauss(rng);
-
-      // Smooth GP approximation via random Fourier features with a small
-      // Gaussian spectral density (→ RBF-ish). Normalised to unit variance.
-      const M = 40, ell = 28; // in samples
-      const w = new Array(M), b = new Array(M), amp = Math.sqrt(2 / M);
-      for (let m = 0; m < M; m++) {
-        w[m] = gauss(rng) / ell;
-        b[m] = rng() * 2 * Math.PI;
-      }
-      const gp = new Array(N);
-      for (let i = 0; i < N; i++) {
-        let s = 0;
-        for (let m = 0; m < M; m++) s += Math.cos(w[m] * i + b[m]);
-        gp[i] = amp * s;
-      }
-
-      function drawTrace(data, color, yCenter, yAmp) {
-        ctx.beginPath();
-        ctx.lineWidth = 1.4;
-        ctx.strokeStyle = color;
-        // Clamp for display so one huge spike doesn't crush the rest visually.
-        for (let i = 0; i < N; i++) {
-          const x = (i / (N - 1)) * (cvs.width - 60) + 48;
-          const y = yCenter - Math.max(-2.8, Math.min(2.8, data[i])) * yAmp;
-          if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
-        }
-        ctx.stroke();
-      }
-
-      function render() {
-        // Crisp rendering on HiDPI screens.
-        const dpr = window.devicePixelRatio || 1;
-        const cssW = cvs.clientWidth || 520;
-        const cssH = cvs.clientHeight || 260;
-        cvs.width = cssW * dpr; cvs.height = cssH * dpr;
-        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-
-        ctx.clearRect(0, 0, cssW, cssH);
-        // Light panel backdrop.
-        ctx.fillStyle = '#0f1a28';
-        ctx.fillRect(0, 0, cssW, cssH);
-
-        const rowH = cssH / 3;
-        const amp = rowH * 0.28;
-
-        // Thin dashed midline per lane.
-        ctx.setLineDash([2, 4]);
-        ctx.strokeStyle = '#233245';
-        for (let r = 0; r < 3; r++) {
-          ctx.beginPath();
-          ctx.moveTo(48, rowH * (r + 0.5));
-          ctx.lineTo(cssW - 12, rowH * (r + 0.5));
-          ctx.stroke();
-        }
-        ctx.setLineDash([]);
-
-        // Row labels.
-        ctx.font = '600 11px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-        ctx.textBaseline = 'middle';
-        ctx.fillStyle = '#ff7675'; ctx.fillText('White', 8,  rowH * 0.5);
-        ctx.fillStyle = '#74b9ff'; ctx.fillText('AR(1)', 8,  rowH * 1.5);
-        ctx.fillStyle = '#55efc4'; ctx.fillText('GP',    8,  rowH * 2.5);
-
-        // Axis: "time →"
-        ctx.fillStyle = '#7d8b9c';
-        ctx.font = '10px -apple-system, sans-serif';
-        ctx.textBaseline = 'bottom';
-        ctx.fillText('time →', cssW - 48, cssH - 4);
-
-        // Need to rescale canvas coordinates because the working buffer was
-        // resized above; redo the actual plotting now that the panel is clean.
-        // (Scales in drawTrace assume cvs.width already reflects CSS units,
-        // but we set the raw buffer to cssW*dpr — convert explicitly.)
-        const self = cvs;
-        self.width  = cssW * dpr;  // reset after clear? leave the state.
-        self.height = cssH * dpr;
-        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-        ctx.fillStyle = '#0f1a28';
-        ctx.fillRect(0, 0, cssW, cssH);
-        ctx.setLineDash([2, 4]);
-        ctx.strokeStyle = '#233245';
-        for (let r = 0; r < 3; r++) {
-          ctx.beginPath();
-          ctx.moveTo(48, rowH * (r + 0.5));
-          ctx.lineTo(cssW - 12, rowH * (r + 0.5));
-          ctx.stroke();
-        }
-        ctx.setLineDash([]);
-        ctx.font = '600 11px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-        ctx.textBaseline = 'middle';
-        ctx.fillStyle = '#ff7675'; ctx.fillText('White', 8,  rowH * 0.5);
-        ctx.fillStyle = '#74b9ff'; ctx.fillText('AR(1)', 8,  rowH * 1.5);
-        ctx.fillStyle = '#55efc4'; ctx.fillText('GP',    8,  rowH * 2.5);
-        ctx.fillStyle = '#7d8b9c';
-        ctx.font = '10px -apple-system, sans-serif';
-        ctx.textBaseline = 'bottom';
-        ctx.fillText('time →', cssW - 48, cssH - 4);
-
-        // Redraw using the proper cvs.width (in CSS pixels now) — recompute.
-        const plotW = cssW;
-        function draw(data, color, yCenter) {
-          ctx.beginPath();
-          ctx.lineWidth = 1.5;
-          ctx.strokeStyle = color;
-          for (let i = 0; i < N; i++) {
-            const x = 48 + (i / (N - 1)) * (plotW - 60);
-            const y = yCenter - Math.max(-2.8, Math.min(2.8, data[i])) * amp;
-            if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
-          }
-          ctx.stroke();
-        }
-        draw(white, '#ff7675', rowH * 0.5);
-        draw(ar,    '#74b9ff', rowH * 1.5);
-        draw(gp,    '#55efc4', rowH * 2.5);
-      }
-
-      render();
-      // Redraw on resize so the figure stays sharp.
-      window.addEventListener('resize', render);
-    })();
-  </script>
-
-  <script src="page.js" defer></script>
 </body>
 </html>
