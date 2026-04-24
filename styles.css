@@ -42,8 +42,9 @@ header h1 {
 
 .subtitle a { color: var(--accent); }
 
-/* Shared speed→colour legend bar (viridis), used below the header and above the
-   time-space diagram. Kept in sync with the VIRIDIS stops in simulation.js. */
+/* Shared speed→colour legend bar (jet: red = jam, blue = free-flow), used
+   below the header and above the time-space diagram. Kept in sync with the
+   JET stops in simulation.js. */
 .speed-legend {
   display: flex;
   align-items: center;
@@ -67,11 +68,12 @@ header h1 {
   border-radius: 5px;
   background: linear-gradient(
     to right,
-    rgb(68,1,84) 0%,
-    rgb(59,82,139) 25%,
-    rgb(33,145,140) 50%,
-    rgb(94,201,98) 75%,
-    rgb(253,231,37) 100%);
+    rgb(127,0,0) 0%,
+    rgb(255,0,0) 20%,
+    rgb(255,255,0) 40%,
+    rgb(0,255,255) 60%,
+    rgb(0,0,255) 80%,
+    rgb(0,0,143) 100%);
   min-width: 120px;
 }
 .speed-legend-label {

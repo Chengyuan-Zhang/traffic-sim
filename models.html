@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>Motivation &amp; Models — traffic-sim</title>
+<meta name="description" content="Motivation and model equations behind the traffic-sim project: MA-IDM (Gaussian-process driver noise) and dynamic-regression IDM (AR(p) driver noise), from Zhang & Sun (2024) and Zhang, Wang & Sun (2024)." />
+<meta name="author" content="Chengyuan Zhang" />
+<meta name="theme-color" content="#0f1720" />
+<meta property="og:type" content="article" />
+<meta property="og:title" content="Motivation & Models — traffic-sim" />
+<meta property="og:description" content="Why stochastic car-following? A quick tour of MA-IDM and dynamic-regression IDM." />
+<meta property="og:image" content="https://chengyuan-zhang.github.io/traffic-sim/preview.png" />
+<meta property="og:url" content="https://chengyuan-zhang.github.io/traffic-sim/models.html" />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="Motivation & Models — traffic-sim" />
+<meta name="twitter:description" content="Why stochastic car-following? A quick tour of MA-IDM and dynamic-regression IDM." />
+<meta name="twitter:image" content="https://chengyuan-zhang.github.io/traffic-sim/preview.png" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='22' fill='none' stroke='%234fc3f7' stroke-width='8'/%3E%3Ccircle cx='32' cy='10' r='5' fill='%23ffb74d'/%3E%3Ccircle cx='54' cy='32' r='5' fill='%2381c784'/%3E%3C/svg%3E" />
+<link rel="preconnect" href="https://arxiv.org" />
+<link rel="preconnect" href="https://doi.org" />
+<link rel="preconnect" href="https://cdn.jsdelivr.net" />
+<link rel="stylesheet" href="styles.css" />
+<style>
+  /* Page-local typographic tweaks for the long-form prose on this page. */
+  .prose { max-width: 880px; margin: 0 auto; padding: 0 16px 32px; }
+  .prose h2 { margin-top: 32px; color: var(--text); border-bottom: 1px solid #243140; padding-bottom: 6px; }
+  .prose h3 { margin-top: 20px; color: var(--text); }
+  .prose p, .prose li { line-height: 1.65; font-size: 0.96rem; }
+  .prose code { background: #0b1220; padding: 1px 5px; border-radius: 4px; }
+  .prose .lead { font-size: 1.02rem; color: var(--muted); }
+  .prose .paper-card {
+    background: #111a24; border: 1px solid #243140; border-radius: 10px;
+    padding: 16px 20px; margin: 18px 0;
+  }
+  .prose .paper-card h3 { margin-top: 4px; }
+  .prose .paper-meta {
+    font-size: 0.85rem; color: var(--muted); margin-top: -4px; margin-bottom: 10px;
+  }
+  .prose .cta {
+    display: flex; gap: 10px; flex-wrap: wrap; margin-top: 24px;
+    padding: 16px; background: #111a24; border: 1px solid #243140; border-radius: 10px;
+  }
+  .prose .cta a {
+    padding: 8px 14px; border-radius: 6px; background: #1f2b39; color: var(--accent);
+    text-decoration: none; font-weight: 600;
+  }
+  .prose .cta a:hover { background: #2a3a4d; }
+  mjx-container { overflow-x: auto; overflow-y: hidden; }
+</style>
+</head>
+<body>
+  <nav class="topnav" aria-label="Primary">
+    <a class="topnav-brand" href="index.html">🚗 traffic-sim</a>
+    <ul class="topnav-links">
+      <li><a class="topnav-link" href="index.html">Simulator</a></li>
+      <li><a class="topnav-link" href="compare.html">Compare models</a></li>
+      <li><a class="topnav-link active" href="models.html" aria-current="page">Motivation &amp; models</a></li>
+      <li><a class="topnav-link" href="https://github.com/Chengyuan-Zhang/traffic-sim" target="_blank" rel="noopener noreferrer">GitHub</a></li>
+    </ul>
+  </nav>
+
+  <header>
+    <h1>Motivation &amp; Models</h1>
+    <p class="subtitle">
+      The science behind the simulator: why plain IDM isn't enough, and two
+      Bayesian extensions — <strong>MA-IDM</strong> (Gaussian-process driver noise)
+      and <strong>dynamic-regression IDM</strong> (AR(p) driver noise) — that
+      capture the <em>temporal structure</em> of human driving error.
+    </p>
+  </header>
+
+  <main class="prose">
+
+    <h2>1. Motivation: why stochastic car-following?</h2>
+
+    <p class="lead">
+      Deterministic car-following models such as the Intelligent Driver Model (IDM)
+      are elegant, parsimonious, and capture the first-order dynamics of traffic
+      flow very well. But when we actually look at real trajectory data — from
+      HighD, NGSIM, or any modern drone survey — individual drivers simply do not
+      drive that cleanly.
+    </p>
+
+    <p>
+      Two observations motivate our work:
+    </p>
+
+    <ol>
+      <li>
+        <strong>Residuals are large and persistent.</strong> After fitting IDM to
+        a driver's trajectory, the acceleration residual
+        \(\eta_n(t) = \ddot x_n^{\mathrm{obs}}(t) - f_{\mathrm{IDM}}(\cdot)\) has a
+        marginal standard deviation on the order of 0.2&nbsp;m/s² and an
+        autocorrelation time of 1–2&nbsp;s. It is <em>not</em> white noise.
+      </li>
+      <li>
+        <strong>Noise changes macroscopic behaviour.</strong> Feeding white-noise
+        residuals back into a simulation produces high-frequency jitter with
+        little effect on flow. Feeding <em>correlated</em> residuals — with the
+        same marginal variance — produces persistent stop-and-go waves and
+        measurable fundamental-diagram hysteresis. The colour of the noise
+        matters, not just its amplitude.
+      </li>
+    </ol>
+
+    <p>
+      This site lets you see that second point directly. The
+      <a href="compare.html">compare page</a> runs three identical ring roads
+      that differ only in the noise model driving the acceleration residual;
+      the differences in <code>ACF(τ)</code>, fundamental diagram, and
+      jam-duration statistics are visible within seconds.
+    </p>
+
+    <h3>Background: the IDM equation</h3>
+
+    <p>
+      All three stochastic variants here share the same deterministic core — the
+      Intelligent Driver Model of
+      <a href="https://doi.org/10.1103/PhysRevE.62.1805" target="_blank" rel="noopener noreferrer">Treiber, Hennecke &amp; Helbing (2000)</a>:
+    </p>
+
+    <p>
+      \[
+        \dot v_n \;=\; a\!\left[1 - \left(\frac{v_n}{v_0}\right)^{\delta}
+          - \left(\frac{s^{*}(v_n,\Delta v_n)}{s_n}\right)^{2}\right],
+        \qquad
+        s^{*}(v,\Delta v) \;=\; s_0 + v\,T + \frac{v\,\Delta v}{2\sqrt{a\,b}}.
+      \]
+    </p>
+
+    <p>
+      The parameters are: desired speed \(v_0\), safe time headway \(T\), minimum
+      gap \(s_0\), max acceleration \(a\), comfortable braking \(b\), and
+      acceleration exponent \(\delta\). The stochastic extensions below all
+      modify the acceleration as
+    </p>
+
+    <p>
+      \[
+        \dot v_n(t) \;=\; f_{\mathrm{IDM}}\!\big(v_n, \Delta v_n, s_n\big) \;+\; \eta_n(t),
+      \]
+    </p>
+
+    <p>
+      and the <em>only</em> difference between the three models is the
+      stochastic process we assume for \(\eta_n(t)\).
+    </p>
+
+    <!-- ===================== MA-IDM ===================== -->
+
+    <h2>2. MA-IDM — Memory-Augmented IDM (Gaussian-process noise)</h2>
+
+    <div class="paper-card">
+      <h3>Zhang &amp; Sun (2024), <em>Bayesian Calibration of the Intelligent Driver Model</em></h3>
+      <p class="paper-meta">
+        IEEE Transactions on Intelligent Transportation Systems &middot;
+        doi:<a href="https://doi.org/10.1109/TITS.2024.3354102" target="_blank" rel="noopener noreferrer">10.1109/TITS.2024.3354102</a>
+        &middot; [<a href="https://arxiv.org/abs/2210.03571" target="_blank" rel="noopener noreferrer">arXiv:2210.03571</a>]
+      </p>
+
+      <p>
+        <strong>Key idea.</strong> Model the residual \(\eta_n(t)\) as a
+        zero-mean <em>Gaussian process</em> with a stationary covariance kernel
+        \(k(t,t')\). The GP endows the residual with <em>memory</em>: how
+        strongly \(\eta_n(t)\) depends on \(\eta_n(t-\tau)\) is controlled
+        entirely by the kernel.
+      </p>
+
+      <p>
+        \[
+          \eta_n(t) \,\sim\, \mathcal{GP}\!\big(0,\; k(t,t')\big),
+          \qquad
+          k(\tau) \;=\; \sigma_k^{2}\, \kappa\!\left(\frac{|\tau|}{\ell}\right).
+        \]
+      </p>
+
+      <p>
+        The simulator exposes four kernels (RBF and Matérn&nbsp;5/2, 3/2, 1/2),
+        all with the same marginal variance \(\sigma_k^{2}\) and lengthscale
+        \(\ell\). Smoother kernels (RBF) produce smoother acceleration noise;
+        rougher kernels (Matérn&nbsp;1/2, the Ornstein–Uhlenbeck limit) produce
+        visibly jittery traces with the same long-run variance.
+      </p>
+
+      <p>
+        <strong>Calibrated values.</strong> On the HighD dataset the paper
+        reports posterior-mean
+        \(\sigma_k \approx 0.202~\mathrm{m/s^2}\) and
+        \(\ell \approx 1.44~\mathrm{s}\), which are used as the simulator's
+        defaults for the GP mode.
+      </p>
+
+      <p>
+        <strong>Simulation.</strong> Direct sampling from a GP is \(O(N^3)\) in
+        the trajectory length, so we use a random-Fourier-feature approximation
+        \(\eta(t) \approx \sigma\sqrt{2/M}\sum_{m=1}^{M}\cos(\omega_m t + b_m)\)
+        with frequencies drawn from the kernel's spectral density. This keeps
+        sampling \(O(M)\) per step while preserving the target covariance.
+      </p>
+    </div>
+
+    <!-- ===================== DR-IDM ===================== -->
+
+    <h2>3. Dynamic-regression IDM — AR(p) noise</h2>
+
+    <div class="paper-card">
+      <h3>Zhang, Wang &amp; Sun (2024), <em>Calibrating Car-Following Models via Bayesian Dynamic Regression</em></h3>
+      <p class="paper-meta">
+        Transportation Research Part C (ISTTT25) &middot;
+        doi:<a href="https://doi.org/10.1016/j.trc.2024.104719" target="_blank" rel="noopener noreferrer">10.1016/j.trc.2024.104719</a>
+        &middot; [<a href="https://arxiv.org/abs/2307.03340" target="_blank" rel="noopener noreferrer">arXiv:2307.03340</a>]
+      </p>
+
+      <p>
+        <strong>Key idea.</strong> Instead of a continuous-time GP, assume the
+        discretised residual follows an autoregressive process of order \(p\):
+      </p>
+
+      <p>
+        \[
+          \eta_t \;=\; \sum_{i=1}^{p} \rho_i\,\eta_{t-i} \;+\; \varepsilon_t,
+          \qquad
+          \varepsilon_t \sim \mathcal{N}\!\big(0,\, \sigma_\varepsilon^{2}\big).
+        \]
+      </p>
+
+      <p>
+        The coefficients \(\{\rho_1,\ldots,\rho_p\}\) are inferred jointly with
+        the IDM parameters in a fully Bayesian framework. The paper selects
+        model order via DIC/WAIC on HighD and reports posterior-mean
+        \(\boldsymbol\rho\) vectors for \(p=1,\ldots,7\); the simulator uses
+        those exact values (Table&nbsp;1 of the paper, 5&nbsp;Hz sampling).
+      </p>
+
+      <p>
+        <strong>Why AR?</strong> AR(p) is the discrete-time analogue of a
+        low-order linear SDE driving \(\eta(t)\). It is cheap to simulate
+        (\(O(p)\) per step, no matrix factorisations), exactly stationary for
+        any admissible \(\boldsymbol\rho\), and the coefficients themselves are
+        interpretable — \(\rho_1\) is the lag-1 autocorrelation, the dominant
+        root of the characteristic polynomial sets the memory timescale, and
+        so on.
+      </p>
+
+      <p>
+        On the benchmark data, AR(p) achieves predictive log-likelihood
+        comparable to the GP while being roughly an order of magnitude faster
+        to fit, making it attractive for real-time and online calibration.
+      </p>
+    </div>
+
+    <!-- ===================== Baseline ===================== -->
+
+    <h2>4. White-noise baseline (B-IDM)</h2>
+
+    <p>
+      For reference, the simulator also includes the simplest Bayesian IDM
+      formulation, in which the residual is assumed to be i.i.d. Gaussian:
+    </p>
+
+    <p>
+      \[
+        \eta_t \sim \mathcal{N}(0,\sigma^{2}),
+        \qquad \mathrm{Cov}(\eta_t,\eta_{t'}) \;=\; \sigma^{2}\,\mathbb{1}[t=t'].
+      \]
+    </p>
+
+    <p>
+      This is what falls out of a naive least-squares or Gaussian-likelihood
+      calibration. It is a useful baseline precisely because its <em>failure</em>
+      modes — washed-out jam waves, unrealistic short-timescale oscillation — are
+      exactly what the two correlated models above are designed to fix.
+    </p>
+
+    <!-- ===================== Call-to-action ===================== -->
+
+    <h2>5. Try it out</h2>
+
+    <p>
+      The easiest way to build intuition is to play with the simulator. Switch
+      the <em>Noise model</em> dropdown between <code>Gaussian process</code>,
+      <code>AR(p)</code>, and <code>White</code>, then watch the time-space
+      diagram for 30 seconds.
+    </p>
+
+    <div class="cta">
+      <a href="index.html">→ Open the simulator</a>
+      <a href="compare.html">→ Side-by-side comparison</a>
+      <a href="https://arxiv.org/abs/2210.03571" target="_blank" rel="noopener noreferrer">→ Read the MA-IDM paper</a>
+      <a href="https://arxiv.org/abs/2307.03340" target="_blank" rel="noopener noreferrer">→ Read the dynamic-regression IDM paper</a>
+    </div>
+
+    <h2>6. Citation</h2>
+
+    <ol class="refs">
+      <li>
+        Zhang, C., &amp; Sun, L. (2024).
+        <em>Bayesian Calibration of the Intelligent Driver Model.</em>
+        IEEE Transactions on Intelligent Transportation Systems.
+        doi:<a href="https://doi.org/10.1109/TITS.2024.3354102" target="_blank" rel="noopener noreferrer">10.1109/TITS.2024.3354102</a>
+        [<a href="https://arxiv.org/abs/2210.03571" target="_blank" rel="noopener noreferrer">arXiv:2210.03571</a>]
+      </li>
+      <li>
+        Zhang, C., Wang, W., &amp; Sun, L. (2024).
+        <em>Calibrating Car-Following Models via Bayesian Dynamic Regression.</em>
+        Transportation Research Part C: Emerging Technologies, 104719.
+        doi:<a href="https://doi.org/10.1016/j.trc.2024.104719" target="_blank" rel="noopener noreferrer">10.1016/j.trc.2024.104719</a>
+        [<a href="https://arxiv.org/abs/2307.03340" target="_blank" rel="noopener noreferrer">arXiv:2307.03340</a>]
+      </li>
+    </ol>
+
+  </main>
+
+  <footer>
+    <p>Source on <a href="https://github.com/Chengyuan-Zhang/traffic-sim" target="_blank" rel="noopener noreferrer">GitHub</a>.</p>
+    <p class="view-counter">
+      <img src="https://api.visitorbadge.io/api/combined?path=https%3A%2F%2Fchengyuan-zhang.github.io%2Ftraffic-sim%2Fmodels.html&label=views+%2F+unique+visitors&labelColor=%231f2937&countColor=%234fc3f7&style=flat"
+           alt="Page views / unique visitors" loading="lazy" decoding="async" height="20"
+           onerror="this.style.display='none'" />
+    </p>
+  </footer>
+
+  <!-- MathJax: render the LaTeX equations above. Loaded async, inline fallback
+       is just plain source so the page stays readable if the CDN is blocked. -->
+  <script>
+    window.MathJax = {
+      tex: { inlineMath: [['\\(', '\\)']], displayMath: [['\\[', '\\]']] },
+      svg: { fontCache: 'global' }
+    };
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js" async></script>
+  <script src="page.js" defer></script>
+</body>
+</html>

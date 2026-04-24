@@ -25,14 +25,14 @@
     c.getContext("2d").setTransform(DPR, 0, 0, DPR, 0, 0);
   }
 
-  // ---------- Viridis colormap (color-blind-safe, perceptually uniform) ----------
-  const VIRIDIS = [[68,1,84],[59,82,139],[33,145,140],[94,201,98],[253,231,37]];
-  function viridisCss(t) {
+  // ---------- Jet colormap (red = jam, blue = free-flow) ----------
+  const JET = [[127,0,0],[255,0,0],[255,255,0],[0,255,255],[0,0,255],[0,0,143]];
+  function jetCss(t) {
     t = Math.max(0, Math.min(0.999, t || 0));
-    const idx = t * (VIRIDIS.length - 1);
+    const idx = t * (JET.length - 1);
     const i = Math.floor(idx);
     const f = idx - i;
-    const a = VIRIDIS[i], b = VIRIDIS[i + 1] || a;
+    const a = JET[i], b = JET[i + 1] || a;
     const r = Math.round(a[0] + (b[0] - a[0]) * f);
     const g = Math.round(a[1] + (b[1] - a[1]) * f);
     const bl = Math.round(a[2] + (b[2] - a[2]) * f);
@@ -359,9 +359,9 @@
       const theta = (c.s / L) * 2 * Math.PI - Math.PI / 2;
       const x = cx + rPix * Math.cos(theta);
       const y = cy + rPix * Math.sin(theta);
-      // color by speed (viridis: dark = slow, bright = fast)
+      // color by speed (jet: red = slow/jam, blue = fast/free-flow)
       const sp = Math.min(1, c.v / params.v0);
-      ctx.fillStyle = viridisCss(sp);
+      ctx.fillStyle = jetCss(sp);
       ctx.beginPath(); ctx.arc(x, y, carHalfPix, 0, Math.PI * 2); ctx.fill();
       if (c.tagged) {
         ctx.strokeStyle = "#fff"; ctx.lineWidth = 2;

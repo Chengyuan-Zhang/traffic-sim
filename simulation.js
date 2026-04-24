@@ -26,25 +26,26 @@
     c.getContext("2d").setTransform(DPR, 0, 0, DPR, 0, 0);
   }
 
-  // ---------- Perceptually-uniform, color-blind-safe colormap (Viridis) ----------
-  // Five-stop sampling; linear-interpolated. Used for (1) car speed on the ring,
+  // ---------- Speed colormap (jet, reversed: red = jam, blue = free-flow) ----------
+  // Six-stop sampling; linear-interpolated. Used for (1) car speed on the ring,
   // (2) per-pixel speed in the time-space diagram. Matches the CSS gradient in
   // index.html's `.speed-legend` bar so the legend reads the same as the map.
-  const VIRIDIS = [[68,1,84],[59,82,139],[33,145,140],[94,201,98],[253,231,37]];
-  function viridis(t) {
+  // t=0 (stopped)  -> dark red,  t=1 (v0) -> dark blue.
+  const JET = [[127,0,0],[255,0,0],[255,255,0],[0,255,255],[0,0,255],[0,0,143]];
+  function jet(t) {
     t = Math.max(0, Math.min(0.999, t || 0));
-    const idx = t * (VIRIDIS.length - 1);
+    const idx = t * (JET.length - 1);
     const i = Math.floor(idx);
     const f = idx - i;
-    const a = VIRIDIS[i], b = VIRIDIS[i + 1] || a;
+    const a = JET[i], b = JET[i + 1] || a;
     return [
       Math.round(a[0] + (b[0] - a[0]) * f),
       Math.round(a[1] + (b[1] - a[1]) * f),
       Math.round(a[2] + (b[2] - a[2]) * f),
     ];
   }
-  function viridisCss(t) {
-    const [r, g, b] = viridis(t);
+  function jetCss(t) {
+    const [r, g, b] = jet(t);
     return `rgb(${r},${g},${b})`;
   }
 
@@ -445,10 +446,10 @@
       ctx.translate(x, y);
       ctx.rotate(theta + Math.PI / 2);
 
-      // Viridis colormap: dark (slow) → bright (fast). Color-blind-safe and
-      // perceptually uniform; matches the `.speed-legend` gradient above the ring.
+      // Jet colormap: red (jam) → blue (free-flow). Matches the
+      // `.speed-legend` gradient above the ring.
       const ratio = Math.max(0, Math.min(1, c.v / params.v0));
-      ctx.fillStyle = viridisCss(ratio);
+      ctx.fillStyle = jetCss(ratio);
 
       const lenPix = Math.max(6, rPix * carLenRad);
       const x0 = -carWidthPix / 2, y0 = -lenPix / 2;
@@ -909,7 +910,7 @@
       }
       const v = binSum[i] / binCnt[i];
       const ratio = Math.max(0, Math.min(1, v / params.v0));
-      const [r, g, b] = viridis(ratio);
+      const [r, g, b] = jet(ratio);
       colImg.data[i * 4]     = r;
       colImg.data[i * 4 + 1] = g;
       colImg.data[i * 4 + 2] = b;
