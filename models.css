@@ -18,7 +18,12 @@
   --muted-body: #b4c2d4;
 }
 
-.mdl-wrap { max-width: 1080px; margin: 0 auto; padding: 0 24px 40px; }
+.mdl-wrap {
+  display: block; /* Override the simulator page's shared two-column <main> grid. */
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 0 24px 40px;
+}
 
 /* Prose defaults */
 .mdl-prose p, .mdl-prose li {
@@ -40,9 +45,7 @@
   display: grid;
   gap: 24px;
   align-items: center;
-  /* Raised breakpoint to 900 px with min-content-aware columns so the
-     canvas does not crush against its row labels (review item 2.1). */
-  grid-template-columns: minmax(0, 1fr) minmax(360px, 520px);
+  grid-template-columns: minmax(0, 0.9fr) minmax(420px, 1.1fr);
   padding: 8px 0 20px;
   border-bottom: 1px solid #243140;
   margin-bottom: 20px;
