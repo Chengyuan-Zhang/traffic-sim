@@ -1,7 +1,7 @@
 // ================================================================
 // models.js — hero canvas figure for models.html.
 //
-// Renders three sample residual-noise trajectories (white, AR(1),
+// Renders three sample residual-noise trajectories (white, AR(5),
 // smooth GP via random Fourier features) with identical marginal
 // variance so the eye compares *temporal structure*, not amplitude.
 //
@@ -65,11 +65,34 @@
   const white = new Array(N);
   for (let i = 0; i < N; i++) white[i] = gauss(rng);
 
-  // AR(1) with φ=0.9 → lag-1 autocorrelation 0.9, scaled to unit variance.
-  const phi = 0.9, sE = Math.sqrt(1 - phi * phi);
+  function arInnovationScale(coeffs) {
+    const impulse = [1];
+    let sumSq = 1;
+    for (let j = 1; j < 4096; j++) {
+      let value = 0;
+      for (let k = 0; k < coeffs.length; k++) {
+        const lag = j - k - 1;
+        if (lag >= 0) value += coeffs[k] * impulse[lag];
+      }
+      impulse[j] = value;
+      sumSq += value * value;
+    }
+    return 1 / Math.sqrt(sumSq);
+  }
+
+  // AR(5) paper coefficients from Zhang et al. (2024), Table 1.
+  const arCoeffs = [0.874, 0.580, -0.105, -0.315, -0.071];
+  const arScale = arInnovationScale(arCoeffs);
+  const arHist = new Array(arCoeffs.length).fill(0);
   const ar = new Array(N);
-  ar[0] = gauss(rng);
-  for (let i = 1; i < N; i++) ar[i] = phi * ar[i - 1] + sE * gauss(rng);
+  for (let i = -600; i < N; i++) {
+    let mean = 0;
+    for (let k = 0; k < arCoeffs.length; k++) mean += arCoeffs[k] * arHist[k];
+    const next = mean + arScale * gauss(rng);
+    for (let k = arHist.length - 1; k > 0; k--) arHist[k] = arHist[k - 1];
+    arHist[0] = next;
+    if (i >= 0) ar[i] = next;
+  }
 
   // Smooth GP approximation via random Fourier features with a small
   // Gaussian spectral density (RBF-like). Normalised to unit variance.
@@ -128,7 +151,7 @@
     ctx.textBaseline = "middle";
     ctx.textAlign = "left";
     ctx.fillStyle = COLORS.white; ctx.fillText("White", 10, PAD_TOP + rowH * 0.5);
-    ctx.fillStyle = COLORS.ar;    ctx.fillText("AR(1)", 10, PAD_TOP + rowH * 1.5);
+    ctx.fillStyle = COLORS.ar;    ctx.fillText("AR(5)", 10, PAD_TOP + rowH * 1.5);
     ctx.fillStyle = COLORS.gp;    ctx.fillText("GP",    10, PAD_TOP + rowH * 2.5);
 
     // y-axis anchor: one "±2σ" tick label at the top of the first lane

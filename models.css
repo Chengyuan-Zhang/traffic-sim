@@ -32,6 +32,12 @@
   color: var(--muted-body);
 }
 .mdl-prose strong { color: var(--text); }
+.mdl-prose a {
+  color: var(--accent);
+  text-underline-offset: 2px;
+}
+.mdl-prose a:visited { color: #81d4fa; }
+.mdl-prose a:hover { color: #b3e5fc; }
 .mdl-prose code {
   background: #0b1220;
   border: 1px solid #1c2a3a;
