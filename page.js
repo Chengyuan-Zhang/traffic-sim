@@ -47,18 +47,4 @@
       }, 1600);
     });
   }
-  // ---------- Page view counter (visitorbadge.io — free, no signup) ----------
-  // All pages share one counter by using the *same* `path` URL in the badge.
-  // To make sure every page load is actually counted (and not served from the
-  // browser's HTTP cache because index/compare/models.html have the exact same
-  // badge URL), we append a per-load cache-buster query param. `path=...` is
-  // what visitorbadge.io uses to identify the counter, so this extra param
-  // does not fragment the count.
-  try {
-    const badge = document.querySelector('.view-counter img');
-    if (badge && badge.src && badge.src.indexOf('visitorbadge.io') !== -1) {
-      const sep = badge.src.indexOf('?') === -1 ? '?' : '&';
-      badge.src = badge.src + sep + '_=' + Date.now();
-    }
-  } catch (e) { /* non-fatal: leave the cached badge in place */ }
 })();
