@@ -70,10 +70,11 @@
         <h2 id="hero-title">The colour of the noise matters.</h2>
         <p>
           After fitting IDM to a real driver, the acceleration residual
-          \(\eta_n(t)\) is <em>not</em> white — it has a correlation time of
-          1–2&nbsp;s. Feeding the right kind of correlated noise back into a
-          simulator is what turns a clean deterministic trace into the
-          persistent stop-and-go waves you see in real highway data.
+          \(\eta_n(t)\) is <em>not</em> white — its memory effect extends
+          over the past several seconds of driving. Feeding the right kind
+          of correlated noise back into a simulator is what turns a clean
+          deterministic trace into the persistent stop-and-go waves you see
+          in real highway data.
         </p>
         <p>
           This page explains the two Bayesian models the simulator is built
@@ -158,8 +159,12 @@
           After fitting IDM to a driver's trajectory, the acceleration residual
           \(\eta_n(t) = \ddot x_n^{\mathrm{obs}}(t) - f_{\mathrm{IDM}}(\cdot)\)
           has a marginal standard deviation on the order of
-          <b>0.2&nbsp;m/s²</b> and an autocorrelation time of
-          <b>1–2&nbsp;s</b>. It is emphatically <em>not</em> white noise.
+          <b>0.2&nbsp;m/s²</b> and a memory horizon spanning several seconds:
+          the MA-IDM GP lengthscale fitted on HighD is
+          \(\ell\approx 1.4\)&nbsp;s, and the residual still carries useful
+          information from the past <b>~5&nbsp;s</b> of driving (MA-IDM
+          analysis) — pushed out to <b>~10&nbsp;s</b> by the AR(p)
+          calibration. It is emphatically <em>not</em> white noise.
         </p>
       </div>
       <div class="mdl-tile">
@@ -314,7 +319,7 @@
             <div><dt>Memory</dt>         <dd>Roots of \(1-\sum\rho_i z^{-i}\)</dd></div>
             <div><dt>Marginal std</dt>   <dd>\(\sigma_\varepsilon / \sqrt{1-\ldots}\)</dd></div>
             <div><dt>Orders fit</dt>     <dd>\(p=1,\ldots,7\)</dd></div>
-            <div><dt>Selection</dt>      <dd>DIC / WAIC</dd></div>
+            <div><dt>Selection</dt>      <dd>RMSE / CRPS</dd></div>
             <div><dt>Sampling</dt>       <dd>\(O(p)\) per step</dd></div>
           </dl>
         </aside>
@@ -336,10 +341,12 @@
 
           <p>
             The coefficients \(\{\rho_1,\ldots,\rho_p\}\) are inferred jointly
-            with the IDM parameters in a fully Bayesian framework. Model order
-            is selected via DIC/WAIC on HighD; the paper reports posterior-mean
-            \(\boldsymbol\rho\) for \(p=1,\ldots,7\), and the simulator uses
-            those exact values (Table&nbsp;1 of the paper, 5&nbsp;Hz sampling).
+            with the IDM parameters in a fully Bayesian framework. The paper
+            compares orders via short-horizon RMSE / CRPS on HighD and
+            recommends \(p\approx 4\!-\!6\) (using AR(5) for its
+            demonstrations); the simulator exposes \(p=1,\ldots,7\) and uses
+            the posterior-mean \(\boldsymbol\rho\) reported in Table&nbsp;1 of
+            the paper (HighD, 5&nbsp;Hz sampling).
           </p>
 
           <p>
