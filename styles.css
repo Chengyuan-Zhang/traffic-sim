@@ -248,6 +248,40 @@ a:focus-visible {
   border-radius: 4px;
 }
 
+/* Skip-to-content link: visually hidden until keyboard-focused.
+   Lets screen-reader / keyboard users bypass the sticky <nav> straight
+   to <main id="main-content">. The target itself is given tabindex="-1"
+   so focus lands on the content region after activation. */
+.skip-link {
+  position: absolute;
+  left: 12px;
+  top: -40px;
+  z-index: 1000;
+  padding: 8px 14px;
+  background: var(--panel);
+  color: var(--accent);
+  text-decoration: none;
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  font-size: 0.9rem;
+  transition: top 0.15s ease;
+}
+.skip-link:focus,
+.skip-link:focus-visible {
+  top: 8px;
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Focus ring on the <main> target after a skip-link jump.
+   Keep the outline subtle so it doesn't look like a permanent box. */
+main[id="main-content"]:focus { outline: none; }
+main[id="main-content"]:focus-visible {
+  outline: 2px dashed rgba(79,195,247,0.45);
+  outline-offset: 6px;
+  border-radius: 8px;
+}
+
 footer {
   text-align: center;
   padding: 16px;

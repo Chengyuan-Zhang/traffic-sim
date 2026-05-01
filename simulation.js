@@ -270,7 +270,7 @@
       if (gap < 0) gap += L;
       let acc = idmAccel(me.v, lead.v, gap);
 
-      // Driver noise: GP (MA-IDM), AR(1), or white (B-IDM baseline).
+      // Driver noise: GP (MA-IDM), AR(p) (DR-IDM), or white (B-IDM baseline).
       // Soft-saturate at ±5 m/s²: a human driver physically cannot impose larger
       // acceleration errors, and this keeps large-σ runs bounded without solely
       // relying on the hard overlap clamp below. tanh is smooth & symmetric.

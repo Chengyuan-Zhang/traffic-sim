@@ -136,13 +136,27 @@ Each model uses its own posterior-mean σ from Table 1 of the respective
 paper; the *Noise scale* slider multiplies all three by the same factor, so
 `1×` reproduces paper fidelity.
 
+## Motivation & models page
+
+[`models.html`](models.html) is a long-form explainer of the science behind
+the simulator: why deterministic IDM misses the interesting jam dynamics,
+and how MA-IDM (Gaussian-process driver noise) and DR-IDM (AR(p) driver
+noise) differ in their assumptions, parameters, and computational cost.
+Includes a hero figure with three sample residual traces, the IDM equations
+typeset with MathJax, per-paper "at a glance" cards, and a side-by-side
+comparison table.
+
 ## Files
 
 - `index.html` — main-simulator page layout and controls
 - `compare.html` — side-by-side noise-model comparison page
-- `styles.css` — shared styling for both pages
+- `models.html` — motivation, model equations, and paper summaries
+- `404.html` — friendly Not-Found page for GitHub Pages
+- `styles.css` — shared styling for all pages
+- `models.css` — page-local styles for `models.html`
 - `simulation.js` — IDM integration, three noise models, and canvas rendering
 - `compare.js` — lockstep IDM × 3 with per-model paper-calibrated sigmas
+- `models.js` — hero canvas figure for `models.html`
 - `page.js` — small shared page-glue script (Copy-BibTeX, mailto obfuscation)
 - `.nojekyll` — tells GitHub Pages not to process with Jekyll
 

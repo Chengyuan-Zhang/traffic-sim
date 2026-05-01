@@ -1,6 +1,6 @@
-// Shared page-glue utilities used by index.html and compare.html.
-// Dependency-free, runs on DOMContentLoaded / at load (both scripts use `defer` semantics
-// by being placed at the end of <body>, so the DOM is ready).
+// Shared page-glue utilities used by index.html, compare.html, and models.html.
+// Dependency-free; loaded with `defer` from <head>, so the script runs after
+// the DOM is parsed but before DOMContentLoaded fires.
 
 (() => {
   "use strict";
