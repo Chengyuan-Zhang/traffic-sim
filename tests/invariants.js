@@ -231,6 +231,10 @@ stressRing('defaults, GP noise', { numCars: 30, radius: 120, dtStep: 0.05, gpSig
 stressRing('AR noise at maximum sigma', { numCars: 30, radius: 120, dtStep: 0.05, gpSigma: 1.0, noiseMode: 'ar', arOrder: 5 }, 3000);
 stressRing('largest integration step', { numCars: 30, radius: 120, dtStep: 2.0, gpSigma: 1.0, noiseMode: 'ar', arOrder: 1 }, 400);
 stressRing('densest feasible ring', { numCars: 57, radius: 60, dtStep: 0.2, gpSigma: 0.6, noiseMode: 'gp' }, 1500);
+stressRing('heterogeneous drivers', {
+  numCars: 37, radius: 128, dtStep: 0.2, gpSigma: 0.3,
+  noiseMode: 'gp', hetero: 0.25, initialSpeed: 11.6,
+}, 1500);
 
 {
   const sim = openSim();
@@ -433,6 +437,103 @@ section('the claim the site is built on');
         totals.gp > totals.white && totals.ar > totals.white,
         `sd of mean ring speed: white ${totals.white.toFixed(3)}, ` +
         `GP ${totals.gp.toFixed(3)}, AR(2) ${totals.ar.toFixed(3)} m/s`);
+}
+
+// ===========================================================================
+section('driver heterogeneity');
+
+{
+  // The papers model heterogeneity as ln(θ_d) ~ N(ln θ, Σ): log-normal, with
+  // the population value as the median. Draws are truncated at ±2 sd, which
+  // shrinks the realised spread to about 0.88 of the nominal value.
+  const sim = openSim();
+  Object.assign(sim.params, { numCars: 80, radius: 250, hetero: 0.2 });
+  sim.initCars();
+  const logs = sim.cars.map((c) => Math.log(c.m.v0));
+  const meanLog = logs.reduce((a, b) => a + b, 0) / logs.length;
+  const sdLog = stdev(logs);
+  check('per-driver parameters are log-normal about the population value',
+        Math.abs(meanLog) < 0.12 && sdLog > 0.09 && sdLog < 0.27,
+        `mean of log-multiplier ${meanLog.toFixed(3)} (target 0), sd ${sdLog.toFixed(3)} ` +
+        `(nominal 0.20, ~0.18 after truncation)`);
+
+  const off = openSim();
+  off.params.hetero = 0;
+  off.initCars();
+  const identical = off.cars.every((c) =>
+    ['v0', 's0', 'T', 'a', 'b'].every((k) => c.m[k] === 1));
+  check('heterogeneity off leaves every driver identical', identical);
+}
+
+{
+  // The mechanism the papers point at: with identical drivers a ring stays
+  // perfectly uniform, so any dispersion must come from the noise. Give the
+  // drivers different parameters and dispersion appears with no noise at all.
+  function finalSpeedSpread(hetero) {
+    const sim = openSim('seed=7');
+    Object.assign(sim.params, {
+      numCars: 37, radius: 128, dtStep: 0.2, gpSigma: 0, hetero, initialSpeed: 11.6,
+    });
+    sim.initCars();
+    for (let t = 0; t < 2000; t++) sim.step(0.2);   // 400 s
+    return stdev(sim.cars.map((c) => c.v));
+  }
+  const homogeneous = finalSpeedSpread(0);
+  const heterogeneous = finalSpeedSpread(0.15);
+  check('heterogeneous drivers disperse a noise-free ring, identical drivers do not',
+        homogeneous < 1e-9 && heterogeneous > 0.1,
+        `speed sd after 400 s with no noise: identical ${homogeneous.toExponential(1)} m/s, ` +
+        `heterogeneous ${heterogeneous.toFixed(3)} m/s`);
+}
+
+// ===========================================================================
+section('paper-scenario presets');
+
+{
+  // Ring geometry quoted from arXiv:2210.03571 SVI-C and arXiv:2307.03340 S4.3.2.
+  const EXPECTED = {
+    'ma-homog':  { radius: 128, numCars: 37, dtStep: 0.2, initialSpeed: 11.6, noiseMode: 'white', hetero: 0 },
+    'ma-hetero': { radius: 128, numCars: 37, dtStep: 0.2, initialSpeed: 11.6, noiseMode: 'gp' },
+    'dr-dense':  { radius: 128, numCars: 37, dtStep: 0.2, initialSpeed: 11.6, noiseMode: 'ar', arOrder: 5 },
+  };
+  for (const [name, expected] of Object.entries(EXPECTED)) {
+    const page = loadModule(REPO, 'simulation.js', 'index.html', { expose: SIM_INTERNALS });
+    const select = page.el('preset');
+    select.value = name;
+    select.dispatch('change');
+    const got = page.internals.params;
+    const wrong = Object.keys(expected).filter((k) => got[k] !== expected[k]);
+    check(`preset "${name}" applies the published ring setup`,
+          wrong.length === 0,
+          wrong.length
+            ? wrong.map((k) => `${k}: ${got[k]} != ${expected[k]}`).join(', ')
+            : `R = ${got.radius} m, N = ${got.numCars}, dt = ${got.dtStep} s, v0 = ${got.initialSpeed} m/s`);
+  }
+
+  // theta for the homogeneous scenario is the recommendation vector both papers
+  // cite, [33.3, 2.0, 1.6, 1.5, 1.67] in the order [v0, s0, T, alpha, beta].
+  const page = loadModule(REPO, 'simulation.js', 'index.html', { expose: SIM_INTERNALS });
+  const select = page.el('preset');
+  select.value = 'ma-homog';
+  select.dispatch('change');
+  const p = page.internals.params;
+  check('the homogeneous preset uses theta_rec',
+        p.v0 === 33.3 && p.s0 === 2.0 && p.T === 1.6 && p.a === 1.5 && p.b === 1.67,
+        `[${p.v0}, ${p.s0}, ${p.T}, ${p.a}, ${p.b}]`);
+
+  // Every preset value must survive a round trip through the sliders, or the
+  // sidebar would silently show something the scenario did not ask for.
+  const snapped = ['radius', 'v0', 's0', 'T', 'a', 'b', 'gpSigma', 'hetero']
+    .filter((k) => Math.abs(parseFloat(page.el(k).value) - p[k]) > 1e-9);
+  check('preset values round-trip through the sliders', snapped.length === 0,
+        snapped.length ? `snapped: ${snapped.join(', ')}` : 'radius, IDM parameters, sigma, heterogeneity');
+
+  // Selecting Custom must release the pinned initial speed.
+  select.value = 'custom';
+  select.dispatch('change');
+  check('returning to Custom releases the pinned initial speed',
+        page.internals.params.initialSpeed === 0,
+        `initialSpeed = ${page.internals.params.initialSpeed}`);
 }
 
 // ===========================================================================

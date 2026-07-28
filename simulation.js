@@ -76,6 +76,14 @@
     noiseMode: "gp",    // "gp" | "ar" | "white"
     arOrder: 2,         // AR(p) order; uses paper-calibrated ρ for this order
 
+    // Per-driver heterogeneity. Both papers model it as ln(θ_d) ~ N(ln(θ), Σ)
+    // — log-normal variation whose median is the population parameter. This is
+    // the log-scale standard deviation; 0 reproduces the homogeneous setting.
+    hetero: 0,
+    // Initial speed (m/s). 0 means "use the IDM equilibrium speed for the
+    // starting density"; the paper scenarios pin it to their stated 11.6 m/s.
+    initialSpeed: 0,
+
     // Measuring region on the ring (in degrees; 0 = top, clockwise).
     regionCenter: 0,
     regionSpan: 90,
@@ -105,6 +113,8 @@
     gpKernel:     { type: "enum", values: ["rbf", "matern52", "matern32", "matern12"] },
     noiseMode:    { type: "enum", values: ["gp", "ar", "white"] },
     arOrder:      { type: "enum", values: [1, 2, 3, 4, 5, 6, 7], numeric: true },
+    hetero:       { type: "num",  min: 0,    max: 0.4  },
+    initialSpeed: { type: "num",  min: 0,    max: 40   },
     regionCenter: { type: "num",  min: 0,    max: 359  },
     regionSpan:   { type: "num",  min: 10,   max: 360  },
     seed:         { type: "int",  min: 0,    max: 2147483647 },
@@ -369,12 +379,37 @@
   }
 
   // Largest vehicle count that physically fits: N*(carLength + s0) <= L.
+  // With heterogeneity on, use the largest s0 a driver can draw so that the
+  // bound still holds for the unluckiest ring.
   function maxFeasibleCars() {
-    return Math.max(2, Math.floor(circumference() / (params.carLength + params.s0)));
+    const s0Max = params.s0 * Math.exp(HETERO_TRUNC * Math.max(0, params.hetero));
+    return Math.max(2, Math.floor(circumference() / (params.carLength + s0Max)));
+  }
+
+  // ---------- driver heterogeneity ----------
+  // Both papers place log-normal variation around the population parameter,
+  //   ln(θ_d) ~ N(ln(θ), Σ)      (MA-IDM Eq. 11f; dynamic IDM Eq. 11)
+  // and their ring experiments draw each vehicle's θ from that posterior. The
+  // posterior Σ is not published, so its magnitude is a control here rather
+  // than a hard-coded number — see the note in the sidebar. Draws are truncated
+  // at ±2 sd so the feasible-packing bound above stays computable.
+  const HETERO_PARAMS = ["v0", "s0", "T", "a", "b"];
+  const HETERO_TRUNC = 2;
+  function sampleDriverMultipliers() {
+    const m = {};
+    const sd = params.hetero;
+    for (const k of HETERO_PARAMS) {
+      if (!(sd > 0)) { m[k] = 1; continue; }
+      const z = Math.max(-HETERO_TRUNC, Math.min(HETERO_TRUNC, randn()));
+      m[k] = Math.exp(sd * z);   // median-preserving, as ln(θ_d) ~ N(ln θ, ·)
+    }
+    return m;
   }
 
   // IDM equilibrium speed for a steady state with net gap `s` (Δv = 0):
   // solves 1 - (v/v0)^δ - ((s0 + vT)/s)^2 = 0, strictly decreasing on [0, v0].
+  // Uses the population parameters; with heterogeneity on it is a reference
+  // value, not the equilibrium of any particular driver.
   function equilibriumSpeed(s) {
     const { v0, T, s0, delta } = params;
     if (!(s > s0) || !(v0 > 0)) return 0;
@@ -405,14 +440,19 @@
     const n = params.numCars;
     const spacing = L / n;
     // Start on the IDM equilibrium branch for this density, so a run is not
-    // dominated by a large deterministic relaxation transient.
-    const vInit = equilibriumSpeed(spacing - params.carLength);
+    // dominated by a large deterministic relaxation transient — unless a paper
+    // scenario has pinned the initial speed to its published value.
+    const vInit = params.initialSpeed > 0
+      ? params.initialSpeed
+      : equilibriumSpeed(spacing - params.carLength);
     for (let i = 0; i < n; i++) {
       cars.push({
         s: i * spacing,
         v: vInit,
         color: colorFor(i, n),
         perturbUntil: 0,
+        // Per-driver multipliers on [v0, s0, T, a, b]; all 1 when hetero = 0.
+        m: sampleDriverMultipliers(),
         gp: sampleGPFeatures(params.gpEll, params.gpKernel),
         // Left empty on purpose: arNoise() builds the stationary state lazily,
         // so no burn-in is paid in GP/White mode or while dragging a slider.
@@ -431,12 +471,19 @@
   }
 
   // ---------- IDM ----------
-  function idmAccel(v, vLead, gap) {
-    const { v0, T, a, b, s0, delta } = params;
+  // Parameters are read per driver: params.X is the population value and
+  // car.m.X the driver's multiplier (1 for everyone when heterogeneity is off).
+  function idmAccel(car, v, vLead, gap) {
+    const m = car.m;
+    const v0 = params.v0 * m.v0;
+    const T = params.T * m.T;
+    const a = params.a * m.a;
+    const b = params.b * m.b;
+    const s0 = params.s0 * m.s0;
     const deltaV = v - vLead;
     const sStar = s0 + Math.max(0, v * T + (v * deltaV) / (2 * Math.sqrt(a * b)));
     const safeGap = Math.max(gap, 0.01);
-    return a * (1 - Math.pow(v / v0, delta) - Math.pow(sStar / safeGap, 2));
+    return a * (1 - Math.pow(v / v0, params.delta) - Math.pow(sStar / safeGap, 2));
   }
 
   function step(dt) {
@@ -449,7 +496,7 @@
       const me = cars[i];
       const lead = cars[(i + 1) % n];
       const gap = ringGap(lead.s, me.s, L);
-      let acc = idmAccel(me.v, lead.v, gap);
+      let acc = idmAccel(me, me.v, lead.v, gap);
 
       // Driver noise: GP (MA-IDM), AR(p) (DR-IDM), or white (B-IDM baseline).
       // σ is the MARGINAL std in every mode (the AR innovation is divided by the
@@ -497,9 +544,10 @@
     // Descending order propagates a correction backwards along the platoon; a
     // second pass closes the wrap-around seam.
     const cl = params.carLength;
-    const minGap = params.s0;
     for (let pass = 0; pass < 2; pass++) {
       for (let i = n - 1; i >= 0; i--) {
+        // Each driver keeps its own standstill distance when heterogeneity is on.
+        const minGap = params.s0 * cars[i].m.s0;
         const leadU = (i === n - 1) ? u[0] + L : u[i + 1];
         if (leadU - u[i] - cl >= minGap) continue;
         u[i] = leadU - cl - minGap;
@@ -1290,6 +1338,9 @@
   }
 
   // ---------- UI wiring ----------
+  // Every bound control registers a syncer so that a preset can push new
+  // parameter values back into the sidebar.
+  const controlSyncers = [];
   function bindRange(id, key, fmt = (v) => v) {
     const el = document.getElementById(id);
     const valEl = document.getElementById(id + "Val");
@@ -1304,6 +1355,7 @@
       if (isUser) scheduleWriteState();
     };
     el.addEventListener("input", () => update(true));
+    controlSyncers.push(() => { el.value = String(params[key]); update(false); });
     update(false);
   }
 
@@ -1320,6 +1372,13 @@
   bindRange("regionSpan", "regionSpan", (v) => String(v | 0) + "°");
   bindRange("gpSigma", "gpSigma", (v) => v.toFixed(2));
   bindRange("gpEll", "gpEll", (v) => v.toFixed(2));
+  bindRange("hetero", "hetero", (v) => v.toFixed(2));
+
+  // Redrawing the per-driver multipliers needs a fresh population.
+  document.getElementById("hetero").addEventListener("change", () => {
+    initCars();
+    resetCharts();
+  });
 
   // AR order dropdown (not a range slider)
   const arOrderEl = document.getElementById("arOrder");
@@ -1443,6 +1502,106 @@
   });
 
   document.getElementById("reset").addEventListener("click", () => { initCars(); resetCharts(); });
+
+  // ---------- paper-scenario presets ----------
+  // Ring geometry, vehicle count, initial speed and time step are quoted from
+  // the two papers' ring-road sections:
+  //   arXiv:2210.03571 §VI-C — "The radius is set at 128 m; The initial speed of
+  //     each vehicle is set at 11.6 m/s; There are a total of 37 vehicles
+  //     simulated for 3000 sec; The simulation step is set at 0.2 sec."
+  //   arXiv:2307.03340 §4.3.2 — "a ring radius of 128 m ... initial speeds set at
+  //     11.6 m/s, 32 vehicles for light traffic and 37 vehicles for dense traffic
+  //     ... simulation step as 0.2 s."  (after Sugiyama et al., 2008)
+  // IDM parameters are the posterior means printed in Table I / Table 1, in the
+  // paper's own order θ = [v0, s0, T, α, β]. σ values likewise.
+  //
+  // `hetero` is the ONE number here that is not from a paper: both ring
+  // experiments draw each vehicle's θ from the fitted posterior, but that
+  // posterior's covariance is not published. The value below is an illustrative
+  // spread chosen so the qualitative contrast the papers describe is visible.
+  const PRESETS = {
+    "ma-homog": {
+      label: "MA-IDM ring, homogeneous",
+      // Fig. 10(a): "the parameters are taken as the recommendation values",
+      // θ_rec = [33.3, 2.0, 1.6, 1.5, 1.67], with white acceleration noise.
+      params: {
+        radius: 128, numCars: 37, dtStep: 0.2, initialSpeed: 11.6,
+        v0: 33.3, s0: 2.0, T: 1.6, a: 1.5, b: 1.67, delta: 4,
+        noiseMode: "white", gpSigma: 0.24, hetero: 0,
+      },
+      note: 'MA-IDM Fig. 10(a): 128 m ring, 37 vehicles, 11.6 m/s, Δt = 0.2 s. ' +
+            'IDM parameters are the recommended values θ_rec = [33.3, 2.0, 1.6, 1.5, 1.67] ' +
+            'and every driver is identical. σ = 0.240 m/s² is the B-IDM posterior mean.',
+    },
+    "ma-hetero": {
+      label: "MA-IDM ring, heterogeneous",
+      // Fig. 10(b): "the parameters are sampled from the posteriors in the
+      // hierarchical MA-IDM", whose posterior mean is θ = [16.919, 3.538, 1.183,
+      // 0.553, 2.147] with σ_k = 0.202 m/s² and ℓ = 1.435 s (Table I).
+      params: {
+        radius: 128, numCars: 37, dtStep: 0.2, initialSpeed: 11.6,
+        v0: 16.92, s0: 3.54, T: 1.18, a: 0.55, b: 2.15, delta: 4,
+        noiseMode: "gp", gpSigma: 0.20, gpEll: 1.44, gpKernel: "rbf", hetero: 0.15,
+      },
+      note: 'MA-IDM Fig. 10(b): same ring, but θ is the hierarchical posterior mean ' +
+            '[16.92, 3.54, 1.18, 0.55, 2.15] with GP noise σ_k = 0.202 m/s², ℓ = 1.44 s. ' +
+            'The paper samples each driver from the posterior; the spread here is set by ' +
+            'the heterogeneity slider, not by the paper.',
+    },
+    "dr-dense": {
+      label: "Dynamic-IDM ring, dense",
+      // Fig. 10(c), dense traffic (37 vehicles) with the dynamic IDM at p = 5:
+      // θ = [27.099, 2.843, 1.235, 0.813, 3.422], σ_η = 0.016 (innovation).
+      // The slider is a marginal scale, so 0.016 × 8.9104 ≈ 0.14 m/s².
+      params: {
+        radius: 128, numCars: 37, dtStep: 0.2, initialSpeed: 11.6,
+        v0: 27.10, s0: 2.84, T: 1.24, a: 0.81, b: 3.42, delta: 4,
+        noiseMode: "ar", arOrder: 5, gpSigma: 0.14, hetero: 0.15,
+      },
+      note: 'Dynamic-IDM Fig. 10(c), dense traffic: 37 vehicles, θ = [27.10, 2.84, 1.24, ' +
+            '0.81, 3.42] from Table 1 at p = 5. The paper\'s innovation σ_η = 0.016 m/s² ' +
+            'corresponds to a marginal σ of about 0.14 m/s², which is what the slider shows.',
+    },
+  };
+
+  const presetEl = document.getElementById("preset");
+  const presetNote = document.getElementById("presetNote");
+  const DEFAULT_PRESET_NOTE = presetNote ? presetNote.textContent : "";
+  if (presetEl) {
+    presetEl.addEventListener("change", () => {
+      const preset = PRESETS[presetEl.value];
+      if (!preset) {
+        // Back to Custom: release the pinned initial speed so runs start on the
+        // equilibrium branch again.
+        params.initialSpeed = 0;
+        initCars();
+        resetCharts();
+        scheduleWriteState();
+        if (presetNote) presetNote.textContent = DEFAULT_PRESET_NOTE;
+        return;
+      }
+      for (const [k, v] of Object.entries(preset.params)) {
+        if (k in params) params[k] = v;
+      }
+      syncControls();
+      applyNoiseMode();
+      applyArOrder();
+      resampleAllGP();
+      initCars();
+      resetCharts();
+      scheduleWriteState();
+      if (presetNote) presetNote.textContent = preset.note;
+    });
+  }
+
+  // Push the current params back into every bound control. Used by the presets.
+  function syncControls() {
+    for (const sync of controlSyncers) sync();
+    if (noiseModeEl) noiseModeEl.value = params.noiseMode;
+    if (gpKernelEl) gpKernelEl.value = params.gpKernel;
+    if (arOrderEl) arOrderEl.value = String(params.arOrder);
+    syncFeasibleCars();
+  }
 
   const pauseBtn = document.getElementById("pause");
   pauseBtn.addEventListener("click", () => {

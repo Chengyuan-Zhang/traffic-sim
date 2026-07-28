@@ -243,6 +243,32 @@
       as well.
     </p>
 
+    <p>
+      That hierarchical structure is one of the papers' main contributions, and
+      the simulator now exposes it. Both model drivers as
+    </p>
+
+    <div class="mdl-eq-banner">
+      \[
+        \ln(\boldsymbol\theta_d) \;\sim\; \mathcal{N}\!\big(\ln(\boldsymbol\theta),\,\boldsymbol\Sigma\big),
+      \]
+    </div>
+
+    <p>
+      log-normal variation whose median is the population parameter. The
+      <a href="index.html">simulator's</a> <em>Driver heterogeneity</em> slider
+      is the log-scale standard deviation of that draw, and its <em>Preset</em>
+      menu reproduces the papers' ring scenarios (128 m radius, 37 vehicles,
+      11.6 m/s, \(\Delta t = 0.2\)&nbsp;s). The posterior \(\boldsymbol\Sigma\)
+      is not published, so the slider supplies the magnitude while the papers
+      supply the structure. It matters more than it may sound: with the noise
+      switched off entirely, identical drivers circulate uniformly forever,
+      whereas a heterogeneous population disperses on its own, slower drivers
+      acting as moving bottlenecks. Both papers report exactly this contrast —
+      a "recurring pattern" under fixed parameters against "dynamic and diverse
+      driving styles" when \(\boldsymbol\theta\) is sampled per driver.
+    </p>
+
     <!-- ============================================================ -->
     <!-- 3. MA-IDM                                                     -->
     <!-- ============================================================ -->

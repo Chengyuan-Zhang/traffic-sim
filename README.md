@@ -94,6 +94,44 @@ so that $\dot v_n = f_\text{IDM} + \eta_n(t)$. Three models are available:
   faint dots are a spatial cross-section from four sub-bins and are
   deliberately left unconnected.
 
+## Paper scenarios
+
+The **Preset** control reproduces the ring-road setups from the two papers.
+All three use the geometry both papers state — a 128 m radius (circumference
+≈ 804 m), 37 vehicles, an initial speed of 11.6 m/s and Δt = 0.2 s — after
+[Sugiyama et al. (2008)](https://doi.org/10.1088/1367-2630/10/3/033001):
+
+| Preset | Parameters | Noise |
+| --- | --- | --- |
+| MA-IDM ring — homogeneous (Fig. 10a) | $\theta_\text{rec} = [33.3, 2.0, 1.6, 1.5, 1.67]$, every driver identical | White, $\sigma = 0.240$ |
+| MA-IDM ring — heterogeneous (Fig. 10b) | Hierarchical posterior mean $[16.92, 3.54, 1.18, 0.55, 2.15]$ | GP, $\sigma_k = 0.202$, $\ell = 1.44$ s |
+| Dynamic-IDM ring — dense (Fig. 10c) | $p=5$ posterior mean $[27.10, 2.84, 1.24, 0.81, 3.42]$ | AR(5), marginal $\sigma \approx 0.14$ |
+
+Running each for the papers' 3000 s reproduces the contrast they describe: the
+homogeneous ring settles into a near-uniform state (mean speed 9.5 m/s, spread
+of the ring-average speed 0.03 m/s), while both heterogeneous scenarios develop
+full stop-and-go waves with vehicles reaching a standstill.
+
+### Driver heterogeneity
+
+Both papers' ring experiments draw each vehicle's parameters from the fitted
+posterior rather than giving every driver the same $\theta$ — that hierarchical
+structure is one of their main contributions. The model is
+
+$$\ln(\theta_d) \sim \mathcal{N}\big(\ln(\theta),\,\Sigma\big),$$
+
+i.e. log-normal per-driver variation whose median is the population value. The
+**Driver heterogeneity** slider is the log-scale standard deviation applied
+independently to $v_0$, $s_0$, $T$, $a$ and $b$; draws are truncated at ±2 sd.
+
+> The posterior $\Sigma$ is **not published**, so the magnitude of this spread
+> is a control rather than a paper value. The structure is the papers'; the
+> number is yours. Set it to 0 to recover the homogeneous setting.
+
+Heterogeneity alone is enough to break a ring: with the noise turned off
+entirely, identical drivers stay uniform forever, while a heterogeneous
+population disperses to a speed spread of ~0.3 m/s within a few minutes.
+
 ## Controllable parameters
 
 Everything is adjustable from the sidebar while the simulation is running.
@@ -102,8 +140,10 @@ Everything is adjustable from the sidebar while the simulation is running.
 
 | Control | Range | Meaning |
 | --- | --- | --- |
-| Number of cars | 5 – 80 | Vehicles on the ring. |
+| Preset | Custom / three paper scenarios | Jumps to the ring setups published in the two papers (see above). |
+| Number of cars | 5 – 80 | Vehicles on the ring. Capped at the feasible packing $N(\ell_\text{car}+s_0)\le 2\pi R$. |
 | Ring radius (m) | 60 – 250 | Track length $L = 2\pi R$; density $= N/L$. |
+| Driver heterogeneity | 0 – 0.4 | Log-scale sd of the per-driver parameter draw. 0 = identical drivers. |
 
 **IDM parameters**
 
@@ -205,9 +245,10 @@ paper. The things most worth knowing before drawing conclusions from it:
   detector crossings or Edie's generalised definitions. The four sub-bin points
   in the fundamental diagram are a spatial cross-section and are deliberately
   drawn unconnected; only the whole-arc series is a time trajectory.
-- All drivers share one parameter vector. Both papers' ring experiments instead
-  draw *heterogeneous* per-driver parameters from the joint posterior, which is
-  one of their main contributions.
+- All drivers share one parameter vector unless the **Driver heterogeneity**
+  slider is raised. The papers' ring experiments draw per-driver parameters
+  from the fitted posterior; this demo reproduces the *structure* of that draw
+  but not its published magnitude, which is not available.
 - Matérn 3/2 and 1/2 kernels, and AR orders above the paper's recommended
   $p\approx4$–$6$, are exposed for exploration; the papers calibrate the
   squared-exponential kernel and mention Matérn 5/2 only.
@@ -291,6 +332,14 @@ Please also consider citing the original IDM paper:
 > in empirical observations and microscopic simulations.** *Physical Review E*,
 > 62(2), 1805–1824.
 > doi:[10.1103/PhysRevE.62.1805](https://doi.org/10.1103/PhysRevE.62.1805)
+
+The ring-road scenario the presets reproduce follows:
+
+> Sugiyama, Y., Fukui, M., Kikuchi, M., Hasebe, K., Nakayama, A., Nishinari, K.,
+> Tadaki, S., & Yukawa, S. (2008). **Traffic jams without bottlenecks —
+> experimental evidence for the physical mechanism of the formation of a jam.**
+> *New Journal of Physics*, 10(3), 033001.
+> doi:[10.1088/1367-2630/10/3/033001](https://doi.org/10.1088/1367-2630/10/3/033001)
 
 ## License
 

@@ -75,6 +75,21 @@
       <details class="ctrl-group" open>
         <summary>Scenario</summary>
         <div class="control">
+          <label for="preset">Preset</label>
+          <select id="preset"
+                  title="Jump to the ring-road setups published in the two calibration papers.">
+            <option value="custom" selected>Custom</option>
+            <option value="ma-homog">MA-IDM ring — homogeneous (Fig. 10a)</option>
+            <option value="ma-hetero">MA-IDM ring — heterogeneous (Fig. 10b)</option>
+            <option value="dr-dense">Dynamic-IDM ring — dense traffic (Fig. 10c)</option>
+          </select>
+        </div>
+        <p class="hint" id="presetNote">
+          The paper scenarios use a 128 m ring, 37 vehicles, an initial speed of
+          11.6 m/s and Δt = 0.2 s.
+        </p>
+
+        <div class="control">
           <label for="numCars">Number of cars: <span id="numCarsVal">30</span></label>
           <input type="range" id="numCars" min="5" max="80" value="30"
                  title="Total vehicles on the ring. Higher density → easier jam formation." />
@@ -82,9 +97,20 @@
 
         <div class="control">
           <label for="radius">Ring radius (m): <span id="radiusVal">120</span></label>
-          <input type="range" id="radius" min="60" max="250" value="120" step="5"
+          <input type="range" id="radius" min="60" max="250" value="120" step="1"
                  title="Radius of the circular track. Larger ring = longer effective road (circumference = 2πr)." />
         </div>
+
+        <div class="control">
+          <label for="hetero">Driver heterogeneity (log-scale sd): <span id="heteroVal">0.00</span></label>
+          <input type="range" id="hetero" min="0" max="0.4" value="0" step="0.01"
+                 title="Per-driver spread of the IDM parameters. 0 = every driver identical." />
+        </div>
+        <p class="hint">
+          Both papers model drivers as ln(θ<sub>d</sub>) ~ N(ln θ, Σ) and draw each
+          vehicle's parameters from that posterior. The posterior Σ is not published,
+          so this spread is a control, not a paper value.
+        </p>
 
         <div class="control">
           <label for="speedMul">Sim speed: <span id="speedMulVal">1.0×</span></label>
@@ -103,31 +129,31 @@
         <summary>IDM parameters</summary>
         <div class="control">
           <label for="v0">Desired speed v₀ (m/s): <span id="v0Val">33</span></label>
-          <input type="range" id="v0" min="5" max="40" value="33" step="1"
+          <input type="range" id="v0" min="5" max="40" value="33" step="0.1"
                  title="Free-flow target speed each driver would adopt on an empty road." />
         </div>
 
         <div class="control">
           <label for="T">Safe time headway T (s): <span id="TVal">1.5</span></label>
-          <input type="range" id="T" min="0.3" max="3.0" value="1.5" step="0.1"
+          <input type="range" id="T" min="0.3" max="3.0" value="1.5" step="0.01"
                  title="Desired temporal gap to the leader. Typical values 1.0–1.8 s." />
         </div>
 
         <div class="control">
           <label for="s0">Min. gap s₀ (m): <span id="s0Val">2.0</span></label>
-          <input type="range" id="s0" min="0.5" max="10.0" value="2.0" step="0.1"
+          <input type="range" id="s0" min="0.5" max="10.0" value="2.0" step="0.01"
                  title="Bumper-to-bumper minimum jam spacing." />
         </div>
 
         <div class="control">
           <label for="a">Max acceleration a (m/s²): <span id="aVal">1.2</span></label>
-          <input type="range" id="a" min="0.2" max="3.0" value="1.2" step="0.1"
+          <input type="range" id="a" min="0.2" max="3.0" value="1.2" step="0.01"
                  title="Maximum comfortable acceleration when accelerating to v₀." />
         </div>
 
         <div class="control">
           <label for="b">Comfortable braking b (m/s²): <span id="bVal">1.5</span></label>
-          <input type="range" id="b" min="0.5" max="5.0" value="1.5" step="0.1"
+          <input type="range" id="b" min="0.5" max="5.0" value="1.5" step="0.01"
                  title="Comfortable deceleration target. IDM brakes harder when collision is imminent." />
         </div>
       </details>
@@ -164,7 +190,7 @@
         </div>
         <div class="control">
           <label for="gpSigma">σ — noise scale (m/s²): <span id="gpSigmaVal">0.20</span></label>
-          <input type="range" id="gpSigma" min="0" max="1.0" value="0.20" step="0.05"
+          <input type="range" id="gpSigma" min="0" max="1.0" value="0.20" step="0.01"
                  title="Marginal standard deviation of the IDM acceleration residual η(t). Means the same thing in all three noise models, so they are directly comparable." />
         </div>
         <div class="control" id="kernelRow">
