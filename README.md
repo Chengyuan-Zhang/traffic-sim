@@ -39,11 +39,21 @@ reach the internals, so the assertions run against the code that actually
 ships rather than a re-implementation.
 
 The suite locks down the things that are easy to break silently: the published
-constants from Table 1 of each paper, AR(p) stationarity and marginal scale,
-the ring geometry (no overlaps and no overtaking, including at the extreme
-ends of the sliders), Δt-invariance of the noise, the correlation structure of
-each residual process, equilibrium initialisation, the feasible-packing limit,
-and hostile URL parameters. It takes about ten seconds.
+constants from Table 1 of each paper and every value in the paper presets,
+AR(p) stationarity and marginal scale, the ring geometry (no overlaps, no
+overtaking, each driver's own standstill distance respected, including at the
+extreme ends of the sliders), Δt-invariance of the noise, the correlation
+structure of each residual process, the shape and correlation signs of the
+per-driver parameter draws, equilibrium initialisation, the feasible-packing
+limit, and hostile URL parameters. It runs deterministically in about twenty
+seconds.
+
+Assertions are checked by mutation, not just by passing: reintroducing the
+modular-gap clamp, recording η every integration step, reverting σ to an AR
+innovation scale, perturbing a published coefficient, clamping with the
+population $s_0$ instead of the driver's, drawing the parameters
+independently, and dropping the time weighting from the white-noise average
+each fail exactly the intended check.
 
 ## What's implemented
 
@@ -103,14 +113,25 @@ All three use the geometry both papers state — a 128 m radius (circumference
 
 | Preset | Parameters | Noise |
 | --- | --- | --- |
-| MA-IDM ring — homogeneous (Fig. 10a) | $\theta_\text{rec} = [33.3, 2.0, 1.6, 1.5, 1.67]$, every driver identical | White, $\sigma = 0.240$ |
-| MA-IDM ring — heterogeneous (Fig. 10b) | Hierarchical posterior mean $[16.92, 3.54, 1.18, 0.55, 2.15]$ | GP, $\sigma_k = 0.202$, $\ell = 1.44$ s |
-| Dynamic-IDM ring — dense (Fig. 10c) | $p=5$ posterior mean $[27.10, 2.84, 1.24, 0.81, 3.42]$ | AR(5), marginal $\sigma \approx 0.14$ |
+| MA-IDM ring — homogeneous (Fig. 10a) | $\theta_\text{rec} = [33.3, 2.0, 1.6, 1.5, 1.67]$, every driver identical | White, $\sigma = 0.204$ |
+| MA-IDM ring — heterogeneous (Fig. 10b) | Hierarchical posterior mean $[16.92, 3.54, 1.18, 0.55, 2.15]$ | GP, $\sigma_k = 0.202$, $\ell = 1.435$ s |
+| Dynamic-IDM ring — dense (Fig. 10c) | $p=5$ posterior mean $[27.10, 2.84, 1.24, 0.81, 3.42]$ | AR(5), marginal $\sigma = 0.143$ |
 
-Running each for the papers' 3000 s reproduces the contrast they describe: the
-homogeneous ring settles into a near-uniform state (mean speed 9.5 m/s, spread
-of the ring-average speed 0.03 m/s), while both heterogeneous scenarios develop
-full stop-and-go waves with vehicles reaching a standstill.
+One caveat on the first row: the MA-IDM paper says Fig. 10(a) uses "random white
+noise" but never states its level. The 0.204 m/s² above is that paper's own
+population-level Bayesian IDM value from Table I. (Do not use 0.240 — that is
+the *dynamic-regression* paper's Bayesian IDM row, a different fit.)
+
+Running each for the papers' own 3000 s reproduces the contrast they describe:
+the homogeneous scenario settles into a near-uniform state (mean speed 9.5 m/s,
+spread of the ring-average speed 0.03 m/s), while both heterogeneous scenarios
+develop full stop-and-go waves with vehicles reaching a standstill.
+
+Be careful about *why*, though. The difference is driven mainly by $\theta$, not
+by the heterogeneity: the recommended parameters put the ring in a stable
+regime, whereas both papers' calibrated parameters put it in an unstable one.
+Switching heterogeneity off in either heterogeneous preset barely changes the
+mean speed. See below for what heterogeneity does on its own.
 
 ### Driver heterogeneity
 
@@ -121,16 +142,38 @@ structure is one of their main contributions. The model is
 $$\ln(\theta_d) \sim \mathcal{N}\big(\ln(\theta),\,\Sigma\big),$$
 
 i.e. log-normal per-driver variation whose median is the population value. The
-**Driver heterogeneity** slider is the log-scale standard deviation applied
-independently to $v_0$, $s_0$, $T$, $a$ and $b$; draws are truncated at ±2 sd.
+**Driver heterogeneity** slider is the log-scale standard deviation of that
+draw; values are clipped at ±2 sd, which puts about 5% of draws on the boundary
+and shrinks the realised spread to roughly 0.96 of the nominal figure.
 
-> The posterior $\Sigma$ is **not published**, so the magnitude of this spread
-> is a control rather than a paper value. The structure is the papers'; the
-> number is yours. Set it to 0 to recover the homogeneous setting.
+The draws are **correlated**, not independent. arXiv:2210.03571 §V-B1 reports
+the signs of the strong posterior correlations — positive for $(T, v_0)$,
+$(T, \beta)$ and $(\alpha, \beta)$, negative for $(v_0, s_0)$, $(v_0, \alpha)$,
+$(s_0, T)$, $(s_0, \alpha)$ and $(s_0, \beta)$ — so drawing the five parameters
+independently would contradict the paper's own finding. A single correlation
+strength of 0.4 is applied to every reported pair.
 
-Heterogeneity alone is enough to break a ring: with the noise turned off
-entirely, identical drivers stay uniform forever, while a heterogeneous
-population disperses to a speed spread of ~0.3 m/s within a few minutes.
+> The magnitudes in $\Sigma$ are **not published**, so the size of the spread
+> and that 0.4 are controls, not paper values. The structure and the signs are
+> the papers'; the numbers are not. Set the slider to 0 to recover the
+> homogeneous setting exactly.
+
+**What heterogeneity actually does is regime-dependent.** Standard deviation of
+the ring-average speed over 3000 s, 5 seeds, at each preset's own $\theta$:
+
+| $\theta$ | no noise, identical | no noise, spread 0.15 | GP noise, identical | GP noise, spread 0.15 |
+| --- | --- | --- | --- | --- |
+| $\theta_\text{rec}$ (recommended) | 0.000 | 0.000 | 0.072 | 0.074 |
+| MA-IDM posterior mean | **2.023** | **0.204** | 0.525 | 0.580 |
+| Dynamic-IDM $p=5$ posterior mean | **1.724** | **0.146** | 0.390 | 0.503 |
+
+At the recommended parameters the ring is stable and stays uniform with or
+without heterogeneity. At either paper's calibrated parameters the *identical*
+ring is the unstable one — it forms stop-and-go waves with no noise at all —
+and giving the drivers different parameters **damps** that collective wave by
+about an order of magnitude, because the vehicles no longer share a single
+resonant response. Once noise is switched on, heterogeneity mildly increases
+the fluctuation instead. It is not a monotone "more realism" knob.
 
 ## Controllable parameters
 

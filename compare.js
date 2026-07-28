@@ -333,19 +333,28 @@
   // three noise models incomparable whenever the step size changes.
   function whiteNoise(car, dt) {
     const sigma = SIGMA_WHITE * params.noiseScale;
-    if (car.whiteVal === undefined) car.whiteVal = sigma * randn();
-    car.whiteAccum = (car.whiteAccum || 0) + dt;
-    let sum = 0, cnt = 0;
-    while (car.whiteAccum >= FRAME_DT) {
+    if (car.whiteVal === undefined) {
       car.whiteVal = sigma * randn();
-      sum += car.whiteVal; cnt++;
-      car.whiteAccum -= FRAME_DT;
+      car.whiteAccum = 0;
     }
-    // When one integration step spans several 5 fps frames, the acceleration
-    // applied over that step is the average of the frames it covers (std
-    // sigma/sqrt(cnt)). Keeping only the last draw would inflate the noise
-    // power and break Δt-invariance for Δt > FRAME_DT.
-    return cnt > 1 ? sum / cnt : car.whiteVal;
+    if (!(dt > 0)) return car.whiteVal;
+    // Exact time average of the piecewise-constant residual over the step —
+    // see simulation.js for why the pieces must be duration-weighted.
+    let remaining = dt;
+    let weighted = 0;
+    let guard = 0;
+    while (remaining > 1e-12 && guard++ < 100000) {
+      const untilNextFrame = FRAME_DT - car.whiteAccum;
+      const take = Math.min(remaining, untilNextFrame);
+      weighted += car.whiteVal * take;
+      car.whiteAccum += take;
+      remaining -= take;
+      if (car.whiteAccum >= FRAME_DT - 1e-12) {
+        car.whiteAccum = 0;
+        car.whiteVal = sigma * randn();
+      }
+    }
+    return weighted / dt;
   }
   // AR(p) with the paper's coefficients. The stationary state is built lazily
   // on first use, and a sigma change is applied by rescaling the stored state

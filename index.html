@@ -108,8 +108,11 @@
         </div>
         <p class="hint">
           Both papers model drivers as ln(θ<sub>d</sub>) ~ N(ln θ, Σ) and draw each
-          vehicle's parameters from that posterior. The posterior Σ is not published,
-          so this spread is a control, not a paper value.
+          vehicle's parameters from that posterior, with the correlation signs their
+          §V-B1 reports. The magnitudes in Σ are not published, so this spread is a
+          control, not a paper value. What it does depends on the regime: at the
+          recommended θ the ring is stable either way, while at the papers' calibrated θ
+          the <em>identical</em> ring is the unstable one and a spread damps its wave.
         </p>
 
         <div class="control">
@@ -129,7 +132,7 @@
         <summary>IDM parameters</summary>
         <div class="control">
           <label for="v0">Desired speed v₀ (m/s): <span id="v0Val">33</span></label>
-          <input type="range" id="v0" min="5" max="40" value="33" step="0.1"
+          <input type="range" id="v0" min="5" max="40" value="33" step="0.01"
                  title="Free-flow target speed each driver would adopt on an empty road." />
         </div>
 
@@ -190,7 +193,7 @@
         </div>
         <div class="control">
           <label for="gpSigma">σ — noise scale (m/s²): <span id="gpSigmaVal">0.20</span></label>
-          <input type="range" id="gpSigma" min="0" max="1.0" value="0.20" step="0.01"
+          <input type="range" id="gpSigma" min="0" max="1.0" value="0.20" step="0.001"
                  title="Marginal standard deviation of the IDM acceleration residual η(t). Means the same thing in all three noise models, so they are directly comparable." />
         </div>
         <div class="control" id="kernelRow">
@@ -204,8 +207,8 @@
           </select>
         </div>
         <div class="control" id="ellRow">
-          <label for="gpEll">ℓ — lengthscale (s): <span id="gpEllVal">1.44</span></label>
-          <input type="range" id="gpEll" min="0.1" max="5.0" value="1.44" step="0.01"
+          <label for="gpEll">ℓ — lengthscale (s): <span id="gpEllVal">1.435</span></label>
+          <input type="range" id="gpEll" min="0.1" max="5.0" value="1.435" step="0.005"
                  title="Temporal lengthscale of the GP kernel: roughly how long noise stays correlated. Paper posterior mean is 1.44 s." />
         </div>
         <div class="control" id="arRow">

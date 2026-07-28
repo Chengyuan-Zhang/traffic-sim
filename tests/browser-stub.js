@@ -24,9 +24,12 @@ function scrapeControlDefaults(html) {
     const id = (attrs.match(/id="([^"]+)"/) || [])[1];
     if (!id) continue;
     out[id] = {
+      tag: m[1],
+      type: (attrs.match(/type="([^"]+)"/) || [])[1],
       value: (attrs.match(/value="([^"]+)"/) || [])[1],
       min: (attrs.match(/min="([^"]+)"/) || [])[1],
       max: (attrs.match(/max="([^"]+)"/) || [])[1],
+      step: (attrs.match(/step="([^"]+)"/) || [])[1],
     };
   }
   const select = /<select\b[^>]*id="([^"]+)"[^>]*>([\s\S]*?)<\/select>/g;
@@ -66,14 +69,33 @@ function createDocument(controlDefaults) {
 
   function createElement(id, tagName) {
     const listeners = {};
+    const spec = controlDefaults[id] || {};
+    // Browsers sanitise <input type="range">: a value that is not min + k*step
+    // is snapped to the nearest step and clamped to [min, max]. Emulating that
+    // is the point — a preset whose value cannot land on its own slider would
+    // otherwise look correct here and silently drift in a real page.
+    const snap = (raw) => {
+      if (spec.type !== 'range' || spec.step === undefined || spec.min === undefined) return raw;
+      const min = parseFloat(spec.min);
+      const max = spec.max === undefined ? Infinity : parseFloat(spec.max);
+      const step = parseFloat(spec.step);
+      const num = parseFloat(raw);
+      if (!Number.isFinite(num) || !Number.isFinite(step) || step <= 0) return raw;
+      const clamped = Math.min(max, Math.max(min, num));
+      const snapped = min + Math.round((clamped - min) / step) * step;
+      // Trim the binary-float dust that min + k*step accumulates.
+      return String(parseFloat(Math.min(max, snapped).toPrecision(12)));
+    };
+    let value = spec.value !== undefined ? snap(spec.value) : '0';
+
     const el = {
       id,
       tagName: (tagName || 'div').toUpperCase(),
       nodeName: (tagName || 'div').toUpperCase(),
-      value: controlDefaults[id] && controlDefaults[id].value !== undefined
-        ? controlDefaults[id].value : '0',
-      min: controlDefaults[id] ? controlDefaults[id].min : undefined,
-      max: controlDefaults[id] ? controlDefaults[id].max : undefined,
+      type: spec.type,
+      min: spec.min,
+      max: spec.max,
+      step: spec.step,
       textContent: '', innerHTML: '', style: {}, dataset: {}, children: [],
       width: 600, height: 300, _w: 600, _h: 300,
 
@@ -86,7 +108,11 @@ function createDocument(controlDefaults) {
         }
       },
 
-      setAttribute(name, value) { if (name === 'max') el.max = value; el['attr:' + name] = value; },
+      setAttribute(name, v) {
+        if (name === 'max') { spec.max = v; el.max = v; }
+        if (name === 'step') { spec.step = v; el.step = v; }
+        el['attr:' + name] = v;
+      },
       getAttribute(name) { return el['attr:' + name]; },
       removeAttribute() {},
       appendChild(child) { el.children.push(child); return child; },
@@ -103,6 +129,11 @@ function createDocument(controlDefaults) {
         return el._ctx;
       },
     };
+    Object.defineProperty(el, 'value', {
+      enumerable: true,
+      get() { return value; },
+      set(v) { value = snap(v); },
+    });
     return el;
   }
 

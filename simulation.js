@@ -71,7 +71,7 @@
     dtStep: 0.05,  // integration step size (s)
     // GP driver noise (arXiv:2210.03571) with choice of kernel
     gpSigma: 0.20,      // output scale (m/s^2)  [MA-IDM: σ_k = 0.202]
-    gpEll: 1.44,        // lengthscale (seconds) [MA-IDM: ℓ = 1.435 s, Table I]
+    gpEll: 1.435,       // lengthscale (seconds) [MA-IDM: ℓ = 1.435 s, Table I]
     gpKernel: "rbf",    // "rbf" | "matern52" | "matern32" | "matern12"
     noiseMode: "gp",    // "gp" | "ar" | "white"
     arOrder: 2,         // AR(p) order; uses paper-calibrated ρ for this order
@@ -83,6 +83,9 @@
     // Initial speed (m/s). 0 means "use the IDM equilibrium speed for the
     // starting density"; the paper scenarios pin it to their stated 11.6 m/s.
     initialSpeed: 0,
+    // Which paper scenario is active, so a shared link and a return visit both
+    // show it. `initialSpeed` above is otherwise invisible sticky state.
+    preset: "custom",
 
     // Measuring region on the ring (in degrees; 0 = top, clockwise).
     regionCenter: 0,
@@ -115,6 +118,7 @@
     arOrder:      { type: "enum", values: [1, 2, 3, 4, 5, 6, 7], numeric: true },
     hetero:       { type: "num",  min: 0,    max: 0.4  },
     initialSpeed: { type: "num",  min: 0,    max: 40   },
+    preset:       { type: "enum", values: ["custom", "ma-homog", "ma-hetero", "dr-dense"] },
     regionCenter: { type: "num",  min: 0,    max: 359  },
     regionSpan:   { type: "num",  min: 10,   max: 360  },
     seed:         { type: "int",  min: 0,    max: 2147483647 },
@@ -265,24 +269,35 @@
   }
 
   // B-IDM baseline: i.i.d. Gaussian residual on the papers' 0.2 s grid.
-  // The sample is held over FRAME_DT rather than redrawn every integration
-  // step, so the effective noise power does not scale with Δt (which would
-  // otherwise change by 100× across the Δt slider and make the three noise
-  // models incomparable). σ is the marginal std.
+  // The process is piecewise constant with a jump every FRAME_DT, and what the
+  // integrator needs over a step is its exact time average,
+  //     (1/dt) * integral of w over [t, t+dt],
+  // so the step is walked frame by frame and each piece weighted by its own
+  // duration. Averaging only the whole frames a step happens to cross (and
+  // ignoring the partial one at each end) leaves the integrated variance
+  // wrong by ~13 % at, say, dt = 0.3 s. With the weighting the discrete sum of
+  // mean*dt equals the true integral exactly, for any dt.
   function whiteNoise(car, dt) {
-    if (car.whiteVal === undefined) car.whiteVal = params.gpSigma * randn();
-    car.whiteAccum = (car.whiteAccum || 0) + dt;
-    let sum = 0, cnt = 0;
-    while (car.whiteAccum >= FRAME_DT) {
+    if (car.whiteVal === undefined) {
       car.whiteVal = params.gpSigma * randn();
-      sum += car.whiteVal; cnt++;
-      car.whiteAccum -= FRAME_DT;
+      car.whiteAccum = 0;
     }
-    // When one integration step spans several 5 fps frames, the acceleration
-    // applied over that step is the average of the frames it covers (std
-    // sigma/sqrt(cnt)). Keeping only the last draw would inflate the noise
-    // power and break Δt-invariance for Δt > FRAME_DT.
-    return cnt > 1 ? sum / cnt : car.whiteVal;
+    if (!(dt > 0)) return car.whiteVal;
+    let remaining = dt;
+    let weighted = 0;
+    let guard = 0;
+    while (remaining > 1e-12 && guard++ < 100000) {
+      const untilNextFrame = FRAME_DT - car.whiteAccum;
+      const take = Math.min(remaining, untilNextFrame);
+      weighted += car.whiteVal * take;
+      car.whiteAccum += take;
+      remaining -= take;
+      if (car.whiteAccum >= FRAME_DT - 1e-12) {
+        car.whiteAccum = 0;
+        car.whiteVal = params.gpSigma * randn();
+      }
+    }
+    return weighted / dt;
   }
 
   // Innovation std that makes the AR(p) process have MARGINAL std = params.gpSigma,
@@ -382,26 +397,52 @@
   // With heterogeneity on, use the largest s0 a driver can draw so that the
   // bound still holds for the unluckiest ring.
   function maxFeasibleCars() {
-    const s0Max = params.s0 * Math.exp(HETERO_TRUNC * Math.max(0, params.hetero));
+    const s0Max = params.s0 * Math.exp(HETERO_CLIP * Math.max(0, params.hetero));
     return Math.max(2, Math.floor(circumference() / (params.carLength + s0Max)));
   }
 
   // ---------- driver heterogeneity ----------
   // Both papers place log-normal variation around the population parameter,
   //   ln(θ_d) ~ N(ln(θ), Σ)      (MA-IDM Eq. 11f; dynamic IDM Eq. 11)
-  // and their ring experiments draw each vehicle's θ from that posterior. The
-  // posterior Σ is not published, so its magnitude is a control here rather
-  // than a hard-coded number — see the note in the sidebar. Draws are truncated
-  // at ±2 sd so the feasible-packing bound above stays computable.
+  // and their ring experiments draw each vehicle's θ from that posterior.
+  //
+  // The magnitude of Σ is not published, so it is a control (`params.hetero`,
+  // the log-scale standard deviation). Its *correlation structure* partly is:
+  // arXiv:2210.03571 §V-B1 reports "Strong positive correlations exist in pairs
+  // of (T, v0), (T, β), and (α, β); while strong negative correlations exist in
+  // the pairs of (v0, s0), (v0, α), (s0, T), (s0, α), and (s0, β)" — signs but
+  // no values, and (v0, β) / (T, α) are not called out. A single strength
+  // r = 0.4 is applied to every reported pair; the resulting matrix stays
+  // positive definite up to r ≈ 0.495. HETERO_CHOL is the lower-triangular
+  // Cholesky factor of I + 0.4·S in the papers' order [v0, s0, T, α, β], so
+  // L·z with z ~ N(0, I) gives correlated standard normals. Drawing the five
+  // parameters independently would contradict the paper's own finding — it
+  // would produce drivers with, say, a low α beside a high β.
   const HETERO_PARAMS = ["v0", "s0", "T", "a", "b"];
-  const HETERO_TRUNC = 2;
+  const HETERO_CHOL = [
+    [ 1.000000,  0,         0,         0,         0        ],
+    [-0.400000,  0.916515,  0,         0,         0        ],
+    [ 0.400000, -0.261861,  0.878310,  0,         0        ],
+    [-0.400000, -0.611010,  0,         0.683130,  0        ],
+    [ 0,        -0.436436,  0.325300,  0.195180,  0.815848 ],
+  ];
+  // Draws are CLIPPED (not resampled) at ±2 sd so the feasible-packing bound in
+  // maxFeasibleCars() stays exact. About 4.6 % of draws land on the boundary
+  // and the realised spread is ~0.96 of the nominal value.
+  const HETERO_CLIP = 2;
   function sampleDriverMultipliers() {
     const m = {};
     const sd = params.hetero;
-    for (const k of HETERO_PARAMS) {
-      if (!(sd > 0)) { m[k] = 1; continue; }
-      const z = Math.max(-HETERO_TRUNC, Math.min(HETERO_TRUNC, randn()));
-      m[k] = Math.exp(sd * z);   // median-preserving, as ln(θ_d) ~ N(ln θ, ·)
+    if (!(sd > 0)) {
+      for (const k of HETERO_PARAMS) m[k] = 1;
+      return m;
+    }
+    const z = [randn(), randn(), randn(), randn(), randn()];
+    for (let i = 0; i < HETERO_PARAMS.length; i++) {
+      let x = 0;
+      for (let j = 0; j <= i; j++) x += HETERO_CHOL[i][j] * z[j];
+      x = Math.max(-HETERO_CLIP, Math.min(HETERO_CLIP, x));
+      m[HETERO_PARAMS[i]] = Math.exp(sd * x);   // median-preserving
     }
     return m;
   }
@@ -929,10 +970,12 @@
     cx.fill();
 
     // Time-axis labels at the left and right edges of the trace so the viewer
-    // knows the time span of the visible buffer. Derived from the sampling
-    // schedule so the label cannot drift away from the data.
+    // knows the time span of the visible buffer. Diagnostics cannot be sampled
+    // faster than one integration step, so the real interval is the larger of
+    // the two — with the paper presets' Δt = 0.2 s the window is 120 s, not 60.
     // opts.windowSec lets callers override the label.
-    const windowSec = (opts && opts.windowSec) || Math.round(MAX_POINTS * STATS_INTERVAL);
+    const sampleInterval = Math.max(STATS_INTERVAL, params.dtStep);
+    const windowSec = (opts && opts.windowSec) || Math.round(MAX_POINTS * sampleInterval);
     cx.fillStyle = "rgba(230,237,243,0.45)";
     cx.font = "10px -apple-system, Segoe UI, sans-serif";
     cx.textBaseline = "bottom";
@@ -1060,7 +1103,9 @@
       xFD.font = "10px -apple-system, Segoe UI, sans-serif";
       xFD.textAlign = "left";
       xFD.textBaseline = "bottom";
-      xFD.fillText("IDM equilibrium q(ρ)", kToX(peak.k) + 6, Math.max(12, qToY(peak.q) - 4));
+      xFD.fillText(
+        params.hetero > 0 ? "IDM equilibrium q(ρ) — population θ" : "IDM equilibrium q(ρ)",
+        kToX(peak.k) + 6, Math.max(12, qToY(peak.q) - 4));
     }
 
     // Trajectory polyline for the measuring arc as a whole. These points ARE a
@@ -1354,24 +1399,36 @@
       el.setAttribute("aria-valuetext", String(label));
       if (isUser) scheduleWriteState();
     };
-    el.addEventListener("input", () => update(true));
+    el.addEventListener("input", () => { update(true); markCustom(); });
     controlSyncers.push(() => { el.value = String(params[key]); update(false); });
     update(false);
   }
 
+  // Any manual edit leaves the scenario, so the dropdown stops claiming a
+  // preset is active and the pinned initial speed is released. Without this,
+  // `initialSpeed` would survive in localStorage as invisible state and every
+  // later visit would silently start off the equilibrium branch.
+  function markCustom() {
+    if (params.preset === "custom") return;
+    params.preset = "custom";
+    params.initialSpeed = 0;
+    if (presetEl) presetEl.value = "custom";
+    if (presetNote) presetNote.textContent = DEFAULT_PRESET_NOTE;
+  }
+
   bindRange("numCars", "numCars", (v) => String(v | 0));
-  bindRange("v0", "v0");
-  bindRange("T", "T", (v) => v.toFixed(1));
-  bindRange("s0", "s0", (v) => v.toFixed(1));
-  bindRange("a", "a", (v) => v.toFixed(1));
-  bindRange("b", "b", (v) => v.toFixed(1));
+  bindRange("v0", "v0", (v) => v.toFixed(2));
+  bindRange("T", "T", (v) => v.toFixed(2));
+  bindRange("s0", "s0", (v) => v.toFixed(2));
+  bindRange("a", "a", (v) => v.toFixed(2));
+  bindRange("b", "b", (v) => v.toFixed(2));
   bindRange("radius", "radius");
   bindRange("speedMul", "speedMul", (v) => v.toFixed(2) + "×");
   bindRange("dtStep", "dtStep", (v) => v.toFixed(2));
   bindRange("regionCenter", "regionCenter", (v) => String(v | 0) + "°");
   bindRange("regionSpan", "regionSpan", (v) => String(v | 0) + "°");
-  bindRange("gpSigma", "gpSigma", (v) => v.toFixed(2));
-  bindRange("gpEll", "gpEll", (v) => v.toFixed(2));
+  bindRange("gpSigma", "gpSigma", (v) => v.toFixed(3));
+  bindRange("gpEll", "gpEll", (v) => v.toFixed(3));
   bindRange("hetero", "hetero", (v) => v.toFixed(2));
 
   // Redrawing the per-driver multipliers needs a fresh population.
@@ -1493,6 +1550,8 @@
   }
   document.getElementById("radius").addEventListener("input", syncFeasibleCars);
   document.getElementById("s0").addEventListener("input", syncFeasibleCars);
+  // hetero widens the largest s0 a driver can draw, so it moves the bound too.
+  document.getElementById("hetero").addEventListener("input", syncFeasibleCars);
   syncFeasibleCars();
 
   document.getElementById("perturb").addEventListener("click", () => {
@@ -1523,15 +1582,20 @@
     "ma-homog": {
       label: "MA-IDM ring, homogeneous",
       // Fig. 10(a): "the parameters are taken as the recommendation values",
-      // θ_rec = [33.3, 2.0, 1.6, 1.5, 1.67], with white acceleration noise.
+      // θ_rec = [33.3, 2.0, 1.6, 1.5, 1.67], with "random white noise". The
+      // figure's noise level is NOT stated, so σ is taken from that paper's own
+      // population-level Bayesian IDM row, σ_ε = 0.204 (Table I, Hierarchical
+      // B-IDM (θ)). Do not use 0.240 here: that is the dynamic-regression
+      // paper's Bayesian IDM row, a different fit on different data.
       params: {
         radius: 128, numCars: 37, dtStep: 0.2, initialSpeed: 11.6,
         v0: 33.3, s0: 2.0, T: 1.6, a: 1.5, b: 1.67, delta: 4,
-        noiseMode: "white", gpSigma: 0.24, hetero: 0,
+        noiseMode: "white", gpSigma: 0.204, hetero: 0,
       },
-      note: 'MA-IDM Fig. 10(a): 128 m ring, 37 vehicles, 11.6 m/s, Δt = 0.2 s. ' +
-            'IDM parameters are the recommended values θ_rec = [33.3, 2.0, 1.6, 1.5, 1.67] ' +
-            'and every driver is identical. σ = 0.240 m/s² is the B-IDM posterior mean.',
+      note: 'MA-IDM Fig. 10(a): 128 m ring, 37 vehicles, 11.6 m/s, Δt = 0.2 s, every ' +
+            'driver identical with the recommended θ = [33.3, 2.0, 1.6, 1.5, 1.67]. ' +
+            'The figure\'s noise level is not stated; σ = 0.204 m/s² is Table I\'s ' +
+            'population-level Bayesian IDM value.',
     },
     "ma-hetero": {
       label: "MA-IDM ring, heterogeneous",
@@ -1541,57 +1605,66 @@
       params: {
         radius: 128, numCars: 37, dtStep: 0.2, initialSpeed: 11.6,
         v0: 16.92, s0: 3.54, T: 1.18, a: 0.55, b: 2.15, delta: 4,
-        noiseMode: "gp", gpSigma: 0.20, gpEll: 1.44, gpKernel: "rbf", hetero: 0.15,
+        noiseMode: "gp", gpSigma: 0.202, gpEll: 1.435, gpKernel: "rbf", hetero: 0.15,
       },
       note: 'MA-IDM Fig. 10(b): same ring, but θ is the hierarchical posterior mean ' +
-            '[16.92, 3.54, 1.18, 0.55, 2.15] with GP noise σ_k = 0.202 m/s², ℓ = 1.44 s. ' +
-            'The paper samples each driver from the posterior; the spread here is set by ' +
-            'the heterogeneity slider, not by the paper.',
+            '[16.92, 3.54, 1.18, 0.55, 2.15] with GP noise σ_k = 0.202 m/s², ℓ = 1.435 s. ' +
+            'At this θ the ring is already unstable with identical drivers; the ' +
+            'heterogeneity slider sets a spread the paper does not publish.',
     },
     "dr-dense": {
       label: "Dynamic-IDM ring, dense",
       // Fig. 10(c), dense traffic (37 vehicles) with the dynamic IDM at p = 5:
       // θ = [27.099, 2.843, 1.235, 0.813, 3.422], σ_η = 0.016 (innovation).
-      // The slider is a marginal scale, so 0.016 × 8.9104 ≈ 0.14 m/s².
+      // The slider is a marginal scale, so 0.016 × 8.9104 ≈ 0.143 m/s².
       params: {
         radius: 128, numCars: 37, dtStep: 0.2, initialSpeed: 11.6,
         v0: 27.10, s0: 2.84, T: 1.24, a: 0.81, b: 3.42, delta: 4,
-        noiseMode: "ar", arOrder: 5, gpSigma: 0.14, hetero: 0.15,
+        noiseMode: "ar", arOrder: 5, gpSigma: 0.143, hetero: 0.15,
       },
       note: 'Dynamic-IDM Fig. 10(c), dense traffic: 37 vehicles, θ = [27.10, 2.84, 1.24, ' +
             '0.81, 3.42] from Table 1 at p = 5. The paper\'s innovation σ_η = 0.016 m/s² ' +
-            'corresponds to a marginal σ of about 0.14 m/s², which is what the slider shows.',
+            'corresponds to a marginal σ of 0.143 m/s², which is what the slider shows.',
     },
   };
 
   const presetEl = document.getElementById("preset");
   const presetNote = document.getElementById("presetNote");
   const DEFAULT_PRESET_NOTE = presetNote ? presetNote.textContent : "";
-  if (presetEl) {
-    presetEl.addEventListener("change", () => {
-      const preset = PRESETS[presetEl.value];
-      if (!preset) {
-        // Back to Custom: release the pinned initial speed so runs start on the
-        // equilibrium branch again.
-        params.initialSpeed = 0;
-        initCars();
-        resetCharts();
-        scheduleWriteState();
-        if (presetNote) presetNote.textContent = DEFAULT_PRESET_NOTE;
-        return;
-      }
+
+  function applyPreset(name, reinit) {
+    const preset = PRESETS[name];
+    params.preset = preset ? name : "custom";
+    if (presetEl) presetEl.value = params.preset;
+    if (!preset) {
+      // Back to Custom: release the pinned initial speed so runs start on the
+      // equilibrium branch again.
+      params.initialSpeed = 0;
+      if (presetNote) presetNote.textContent = DEFAULT_PRESET_NOTE;
+    } else {
       for (const [k, v] of Object.entries(preset.params)) {
         if (k in params) params[k] = v;
       }
-      syncControls();
-      applyNoiseMode();
-      applyArOrder();
-      resampleAllGP();
-      initCars();
-      resetCharts();
-      scheduleWriteState();
       if (presetNote) presetNote.textContent = preset.note;
+    }
+    syncControls();
+    applyNoiseMode();
+    applyArOrder();
+    resampleAllGP();
+    if (reinit) { initCars(); resetCharts(); }
+  }
+
+  if (presetEl) {
+    presetEl.addEventListener("change", () => {
+      applyPreset(presetEl.value, true);
+      scheduleWriteState();
     });
+    // Restore the dropdown and its note from the loaded state, but do NOT
+    // re-apply the preset's values: the URL and localStorage already carry
+    // every parameter, including any the visitor changed afterwards.
+    const active = PRESETS[params.preset] ? params.preset : "custom";
+    presetEl.value = active;
+    if (presetNote && PRESETS[active]) presetNote.textContent = PRESETS[active].note;
   }
 
   // Push the current params back into every bound control. Used by the presets.
