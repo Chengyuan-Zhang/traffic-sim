@@ -69,8 +69,11 @@ so that $\dot v_n = f_\text{IDM} + \eta_n(t)$. Three models are available:
 - Live **average speed**, **flow**, and **density** for a user-selected
   measuring arc on the ring.
 - **Time series** of average speed and flow.
-- A **fundamental diagram** (flow vs. density) whose axes auto-scale to fit all
-  collected samples — you never have to tune the range manually.
+- A **fundamental diagram** (flow vs. density) whose axes auto-scale to fit the
+  samples currently held in the buffer — you never have to tune the range
+  manually. The connected line is the measuring arc's time trajectory; the
+  faint dots are a spatial cross-section from four sub-bins and are
+  deliberately left unconnected.
 
 ## Controllable parameters
 
@@ -98,7 +101,7 @@ Everything is adjustable from the sidebar while the simulation is running.
 | Control | Range | Meaning |
 | --- | --- | --- |
 | Sim speed | 0.25× – 10× | Wall-clock multiplier. |
-| Integration step $\Delta t$ (s) | 0.02 – 2.0 | Euler time-step. All three noise processes are $\Delta t$-invariant: white noise and the AR(p) innovations are held on the papers' fixed 0.2 s (5 fps) grid, and the GP is evaluated in continuous time. |
+| Integration step $\Delta t$ (s) | 0.02 – 2.0 | Euler time-step. All three *noise processes* are $\Delta t$-invariant: white noise and the AR(p) innovations live on the papers' fixed 0.2 s (5 fps) grid, and the GP is evaluated in continuous time. The *integration* is not — above roughly 0.2 s the Euler scheme itself introduces visible error, so keep $\Delta t$ small for anything quantitative. |
 
 **Measuring region (density / flow / FD)**
 

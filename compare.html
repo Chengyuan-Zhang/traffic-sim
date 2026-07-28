@@ -166,9 +166,10 @@
         White noise: spike at τ=0, then within the ±2/√N band (grey dashed, 95% CI under i.i.d. noise).
         AR / GP: slow decay — the <em>temporal correlation</em> that distinguishes them from white noise.
         The window runs to 12 s so that the DR-IDM signature is visible: per Zhang, Wang &amp; Sun (2024)
-        the AR residual is positively correlated over roughly the first 5 s and turns <em>negative</em>
-        between about 5 and 10 s. Each curve is drawn only out to a quarter of its available sample
-        length, so it extends as the run accumulates data.
+        the AR residual carries positive correlation over the first few seconds and, for the mid orders
+        the paper recommends (p ≈ 4–6), turns <em>negative</em> between about 5 and 10 s. Low orders
+        (p = 1, 2) stay positive across the whole window. Each curve is drawn only out to a quarter of
+        its available sample length, so it extends as the run accumulates data.
       </p>
       <canvas id="chartAcf" width="900" height="260" role="img"
               aria-label="Empirical autocorrelation function of eta(t) for each noise model, with the plus or minus two over square-root N white-noise confidence band overlaid."></canvas>

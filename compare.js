@@ -170,8 +170,7 @@
   // Stationary standard deviation of the AR(p) process per unit innovation
   // standard deviation, from the Yule–Walker (discrete Lyapunov) solution for
   // the coefficient vectors above. Used to put the AR residual on the same
-  // footing as the GP and white residuals when scaling plots and when the
-  // "equal marginal σ" option is selected.
+  // footing as the GP and white residuals when scaling the η panel.
   const AR_MARGINAL = {
     1: 6.7606, 2: 7.1656, 3: 8.5043, 4: 8.7932,
     5: 8.9104, 6: 9.4167, 7: 10.2738,
@@ -241,12 +240,31 @@
   }
 
   const sims = MODES.map((m) => makeSim(m.id));
+  let physAccum = 0;   // unconsumed simulation time, carried across frames
+
+  // Clears the summary-metrics table. Called on user-initiated resets so a
+  // paused page cannot keep displaying numbers from a previous run.
+  function clearMetrics() {
+    for (const r of METRIC_ROWS) {
+      for (const m of ["white", "ar", "gp"]) {
+        metricValues[r][m] = NaN;
+        const cell = document.getElementById(`m-${r}-${m}`);
+        if (cell) cell.textContent = "–";
+      }
+    }
+  }
+
+  function restartRun() {
+    resetAll();
+    clearMetrics();
+    physAccum = 0;
+  }
 
   function resetAll() {
     // Reject packings that cannot physically exist: N*(carLength + s0) <= L.
     // Without this the ring starts already overlapping and no amount of
     // collision handling can recover a valid single-lane state.
-    const nMax = maxFeasibleCars();
+    const nMax = Math.min(PARAM_SCHEMA.numCars.max, maxFeasibleCars());
     if (params.numCars > nMax) {
       params.numCars = nMax;
       const el = document.getElementById("cmpN");
@@ -260,14 +278,13 @@
     // Start on the IDM equilibrium branch for this density so the run is not
     // dominated by a relaxation transient from an arbitrary initial speed.
     const v0Init = equilibriumSpeed(spacing - params.carLength);
-    const rho = AR_COEFFS[params.arOrder] || AR_COEFFS[1];
-    const sigmaInnov = (SIGMA_AR[params.arOrder] || SIGMA_AR[1]) * params.noiseScale;
     // Identical initial placements across all three sims.
     const taggedIdx = 0;
     for (const sim of sims) {
       sim.cars = [];
       sim.simTime = 0;
       sim.etaHist.length = 0;
+      sim.etaAccum = 0;
       sim.avgSpeedHist.length = 0;
       sim.jamFrames = 0;
       sim.totalFrames = 0;
@@ -279,7 +296,9 @@
           color: colorFor(i, n),
           perturbUntil: 0,
           gp: sampleGPFeatures(params.ell, params.kernel),
-          arHist: stationaryArHistory(rho, sigmaInnov),
+          // arNoise() builds the stationary state lazily, so only the AR ring
+          // pays the burn-in and only on its first step.
+          arHist: [],
           arAccum: 0,
           whiteVal: (SIGMA_WHITE * params.noiseScale) * randn(),
           whiteAccum: 0,
@@ -316,17 +335,37 @@
     const sigma = SIGMA_WHITE * params.noiseScale;
     if (car.whiteVal === undefined) car.whiteVal = sigma * randn();
     car.whiteAccum = (car.whiteAccum || 0) + dt;
+    let sum = 0, cnt = 0;
     while (car.whiteAccum >= FRAME_DT) {
       car.whiteVal = sigma * randn();
+      sum += car.whiteVal; cnt++;
       car.whiteAccum -= FRAME_DT;
     }
-    return car.whiteVal;
+    // When one integration step spans several 5 fps frames, the acceleration
+    // applied over that step is the average of the frames it covers (std
+    // sigma/sqrt(cnt)). Keeping only the last draw would inflate the noise
+    // power and break Δt-invariance for Δt > FRAME_DT.
+    return cnt > 1 ? sum / cnt : car.whiteVal;
   }
+  // AR(p) with the paper's coefficients. The stationary state is built lazily
+  // on first use, and a sigma change is applied by rescaling the stored state
+  // (the process is linear in its innovations, so this is exact).
   function arNoise(car, dt) {
     const rho = AR_COEFFS[params.arOrder] || AR_COEFFS[1];
     const p = rho.length;
     const sigmaInnov = (SIGMA_AR[params.arOrder] || SIGMA_AR[1]) * params.noiseScale;
-    if (!car.arHist || car.arHist.length !== p) car.arHist = new Array(p).fill(0);
+    if (!car.arHist || car.arHist.length !== p) {
+      car.arHist = stationaryArHistory(rho, sigmaInnov);
+      car.arSigma = sigmaInnov;
+    } else if (car.arSigma !== sigmaInnov) {
+      if (car.arSigma > 0) {
+        const k = sigmaInnov / car.arSigma;
+        for (let i = 0; i < p; i++) car.arHist[i] *= k;
+      } else {
+        car.arHist = stationaryArHistory(rho, sigmaInnov);
+      }
+      car.arSigma = sigmaInnov;
+    }
     car.arAccum = (car.arAccum || 0) + dt;
     while (car.arAccum >= FRAME_DT) {
       let mean = 0;
@@ -396,7 +435,7 @@
     return a * (1 - Math.pow(v / v0, delta) - Math.pow(sStar / safeGap, 2));
   }
 
-  const ETA_MAX = 4000; // samples kept per sim (≈200 s at dt=0.05)
+  const ETA_MAX = 2000; // samples kept per sim (2000 × 0.2 s = 400 s)
 
   function stepSim(sim, dt) {
     const L = circumference();
@@ -424,29 +463,36 @@
       if (me.perturbUntil > 0) { acc = Math.min(acc, -4.0); me.perturbUntil -= dt; }
       accels[i] = acc;
     }
+    // Unwrapped coordinates of the platoon at the start of the step (the array
+    // was sorted by s above, so consecutive differences are the true gaps).
+    const uPrev = new Array(n);
+    uPrev[0] = sim.cars[0].s;
+    for (let i = 1; i < n; i++) uPrev[i] = uPrev[i - 1] + (sim.cars[i].s - sim.cars[i - 1].s);
+
+    const u = new Array(n);
     for (let i = 0; i < n; i++) {
       const c = sim.cars[i];
       c.v = Math.max(0, c.v + accels[i] * dt);
-      c.s = (c.s + c.v * dt) % L; if (c.s < 0) c.s += L;
+      u[i] = uPrev[i] + c.v * dt;
     }
-    // Overlap clamp. Iterating in descending index order propagates a
-    // correction backwards along the platoon: pushing car i back tightens the
-    // gap for car i-1, which is processed next. One extra pass closes the
-    // wrap-around seam. Bail out as soon as a pass finds nothing to fix.
+    // Overlap clamp in UNWRAPPED coordinates. A modular gap cannot distinguish
+    // "leader far ahead" from "leader now behind me" — once a follower is
+    // pushed past its leader the modular gap wraps to ~L and the inversion
+    // becomes permanent. See simulation.js for the full rationale.
+    const cl = params.carLength;
     const minGap = params.s0;
-    for (let pass = 0; pass < 4; pass++) {
-      let fixed = 0;
+    for (let pass = 0; pass < 2; pass++) {
       for (let i = n - 1; i >= 0; i--) {
-        const me = sim.cars[i];
+        const leadU = (i === n - 1) ? u[0] + L : u[i + 1];
+        if (leadU - u[i] - cl >= minGap) continue;
+        u[i] = leadU - cl - minGap;
         const lead = sim.cars[(i + 1) % n];
-        if (ringGap(lead.s, me.s, L) >= minGap) continue;
-        let target = lead.s - params.carLength - minGap;
-        target = ((target % L) + L) % L;
-        me.s = target;
-        if (me.v > lead.v) me.v = lead.v;
-        fixed++;
+        if (sim.cars[i].v > lead.v) sim.cars[i].v = lead.v;
       }
-      if (!fixed) break;
+    }
+    for (let i = 0; i < n; i++) {
+      const s = u[i] % L;
+      sim.cars[i].s = s < 0 ? s + L : s;
     }
     // Collect ring statistics *after* the clamp so the reported speeds match
     // the vehicles actually drawn.
@@ -460,7 +506,7 @@
     // Record stats
     const avgV = sumV / n;
     sim.avgSpeedHist.push(avgV);
-    if (sim.avgSpeedHist.length > 8000) sim.avgSpeedHist.splice(0, sim.avgSpeedHist.length - 4000);
+    if (sim.avgSpeedHist.length > 4000) sim.avgSpeedHist.splice(0, sim.avgSpeedHist.length - 4000);
     sim.totalFrames++;
     if (minV < 3.0) sim.jamFrames++;
     // FD point — use full ring (L meters), 4 sub-arcs for scatter diversity
@@ -478,14 +524,22 @@
       }
     }
     if (sim.fdData.length > 4000) sim.fdData.splice(0, sim.fdData.length - 4000);
-    // Tagged car's noise
-    for (const c of sim.cars) {
-      if (c.tagged) {
-        sim.etaHist.push(c.lastEta);
-        if (sim.etaHist.length > ETA_MAX * 2) sim.etaHist.splice(0, sim.etaHist.length - ETA_MAX);
-        break;
-      }
+    // Tagged car's residual, recorded on the papers' 0.2 s (5 fps) grid — the
+    // resolution at which all three processes are defined. Sampling faster than
+    // that would show the white residual's zero-order hold as a spurious
+    // short-lag correlation (ACF at 0.05 s would read 0.75) and contradict this
+    // page's own "white noise has no memory" statement.
+    sim.etaAccum = (sim.etaAccum || 0) + dt;
+    let tagged = null;
+    for (const c of sim.cars) { if (c.tagged) { tagged = c; break; } }
+    while (sim.etaAccum >= FRAME_DT) {
+      if (tagged) sim.etaHist.push(tagged.lastEta);
+      sim.etaAccum -= FRAME_DT;
     }
+    // Strict cap, not an amortised one: η is recorded at 5 Hz, so trimming
+    // every sample is cheap, and a fixed window keeps the metrics comparable
+    // instead of sawtoothing between one and two window lengths.
+    if (sim.etaHist.length > ETA_MAX) sim.etaHist.splice(0, sim.etaHist.length - ETA_MAX);
   }
 
   // ================================================================
@@ -557,8 +611,8 @@
 
   function drawEta() {
     const W = cEta._w || cEta.width, H = cEta._h || cEta.height;
-    drawChartFrame(xEta, W, H, "time (s)", "η(t) (m/s²)");
-    const window = 500;
+    const windowSamples = 150;                  // 150 × 0.2 s = 30 s of history
+    drawChartFrame(xEta, W, H, `time (s) — last ${Math.round(windowSamples * FRAME_DT)} s`, "η(t) (m/s²)");
     // y-range: symmetric around 0, sized from the largest *marginal* standard
     // deviation of the three processes at the current scale. (Using a hard-coded
     // floor of 1.0 here used to dominate the calibrated σ values of 0.24/0.20,
@@ -583,12 +637,12 @@
       const sim = sims.find((s) => s.mode === m.id);
       const n = sim.etaHist.length;
       if (n < 2) continue;
-      const start = Math.max(0, n - window);
+      const start = Math.max(0, n - windowSamples);
       const len = n - start;
       xEta.strokeStyle = m.color; xEta.lineWidth = 1.2;
       xEta.beginPath();
       for (let i = 0; i < len; i++) {
-        const x = 40 + (i / (window - 1)) * (W - 50);
+        const x = 40 + (i / (windowSamples - 1)) * (W - 50);
         const y = y0 - sim.etaHist[start + i] * yScale;
         if (i === 0) xEta.moveTo(x, y); else xEta.lineTo(x, y);
       }
@@ -628,7 +682,9 @@
     // 0–5 s and *negatively* correlated over 5–10 s, which is the paper's
     // central empirical claim. A 6 s window with a −0.3 floor cut that off.
     const axisMaxSec = 12.0;
-    const maxLag = Math.round(axisMaxSec / params.dtStep);
+    // η is recorded on the 0.2 s grid, so that — not the integration step — is
+    // the lag unit.
+    const maxLag = Math.round(axisMaxSec / FRAME_DT);
     const padL = 46, padR = 12, padT = 14, padB = 22;
     const plotW = W - padL - padR, plotH = H - padT - padB;
     const yMin = -0.6, yMax = 1.0;
@@ -668,7 +724,7 @@
       xAcf.strokeStyle = m.color; xAcf.lineWidth = 1.6;
       xAcf.beginPath();
       for (let k = 0; k <= kMax; k++) {
-        const x = xMap(k * params.dtStep);
+        const x = xMap(k * FRAME_DT);
         const y = yMap(Math.max(yMin, Math.min(yMax, res.r[k])));
         if (k === 0) xAcf.moveTo(x, y); else xAcf.lineTo(x, y);
       }
@@ -796,8 +852,8 @@
       for (let i = 1; i < eta.length; i++) c1 += (eta[i - 1] - mean) * (eta[i] - mean);
       const var0 = c0 / eta.length;
       const ac1 = var0 > 1e-12 ? (c1 / eta.length) / var0 : 0;
-      // effective correlation time τ = Δt * Σ r(k) for k>=0 until it drops below 0.05
-      const maxLag = Math.min(200, eta.length - 2);
+      // effective correlation time τ = Δ * Σ r(k) for k>=0 until it drops below 0.05
+      const maxLag = Math.min(Math.round(10 / FRAME_DT), eta.length - 2);
       const res = acf(eta, maxLag);
       let tauEff = 0;
       if (res) {
@@ -805,7 +861,7 @@
           if (res.r[k] < 0.05) break;
           tauEff += res.r[k];
         }
-        tauEff *= params.dtStep;
+        tauEff *= FRAME_DT;
       }
       // Ring-speed std
       const asp = sim.avgSpeedHist;
@@ -849,15 +905,15 @@
   bindRange("cmpEll", "ell", (v) => v.toFixed(2));
   bindRange("cmpSpeed", "speedMul", (v) => v + "×");
 
-  document.getElementById("cmpN").addEventListener("change", resetAll);
-  document.getElementById("cmpRadius").addEventListener("change", resetAll);
+  document.getElementById("cmpN").addEventListener("change", restartRun);
+  document.getElementById("cmpRadius").addEventListener("change", restartRun);
 
   // Keep the vehicle-count slider inside the physically feasible range:
   // no more than L / (carLength + s0) vehicles fit on a single-lane ring.
   const cmpNEl = document.getElementById("cmpN");
   const cmpNLbl = document.getElementById("cmpNVal");
   function syncFeasibleCars() {
-    const nMax = maxFeasibleCars();
+    const nMax = Math.min(PARAM_SCHEMA.numCars.max, maxFeasibleCars());
     cmpNEl.max = String(nMax);
     if (params.numCars > nMax) {
       params.numCars = nMax;
@@ -884,7 +940,9 @@
     params.arOrder = parseInt(e.target.value, 10);
     for (const sim of sims) {
       for (const c of sim.cars) {
-        c.arHist = new Array(AR_COEFFS[params.arOrder].length).fill(0);
+        // Empty, not zero-filled: arNoise() rebuilds it from the stationary
+        // distribution of the new order on first use.
+        c.arHist = [];
         c.arAccum = 0;
       }
     }
@@ -900,7 +958,7 @@
       if (pb) pb.textContent = "Play";
     }
   } catch (_) { /* non-supporting browser */ }
-  document.getElementById("cmpReset").addEventListener("click", resetAll);
+  document.getElementById("cmpReset").addEventListener("click", restartRun);
   document.getElementById("cmpPause").addEventListener("click", (e) => {
     paused = !paused;
     e.target.textContent = paused ? "Resume" : "Pause";
@@ -977,8 +1035,6 @@
   // Main loop
   // ================================================================
   let lastTime = performance.now();
-  let metricsAccum = 0;
-  let physAccum = 0;   // unconsumed simulation time, carried across frames
   function tick(now) {
     let dt = (now - lastTime) / 1000;
     lastTime = now;
@@ -1003,15 +1059,20 @@
       if (work >= 200) physAccum = 0;
     }
     for (const m of MODES) drawRing(m.id);
-    drawEta();
-    drawAcf();
-    drawFd();
-
-    metricsAccum += 1;
-    if (metricsAccum >= 6) { updateMetrics(); metricsAccum = 0; }
+    // Throttle the analysis charts to ~10 Hz. drawAcf alone costs several ms
+    // per call at a 12 s window, and running it every frame would let render
+    // load compete with the physics.
+    if (now - lastChartDraw > 100) {
+      drawEta();
+      drawAcf();
+      drawFd();
+      updateMetrics();
+      lastChartDraw = now;
+    }
 
     requestAnimationFrame(tick);
   }
+  let lastChartDraw = 0;
 
   resetAll();
   requestAnimationFrame(tick);

@@ -262,11 +262,17 @@
   function whiteNoise(car, dt) {
     if (car.whiteVal === undefined) car.whiteVal = params.gpSigma * randn();
     car.whiteAccum = (car.whiteAccum || 0) + dt;
+    let sum = 0, cnt = 0;
     while (car.whiteAccum >= FRAME_DT) {
       car.whiteVal = params.gpSigma * randn();
+      sum += car.whiteVal; cnt++;
       car.whiteAccum -= FRAME_DT;
     }
-    return car.whiteVal;
+    // When one integration step spans several 5 fps frames, the acceleration
+    // applied over that step is the average of the frames it covers (std
+    // sigma/sqrt(cnt)). Keeping only the last draw would inflate the noise
+    // power and break Δt-invariance for Δt > FRAME_DT.
+    return cnt > 1 ? sum / cnt : car.whiteVal;
   }
 
   // Innovation std that makes the AR(p) process have MARGINAL std = params.gpSigma,
@@ -294,12 +300,25 @@
 
   // AR(p) with fixed paper coefficients: eps_t = sum_k rho_k * eps_{t-k} + innov
   // Updates at the paper's 5 fps cadence (FRAME_DT = 0.2 s).
+  // The stationary state is built lazily on first use (so no burn-in cost is
+  // paid in GP/White mode), and a change of sigma is applied by rescaling the
+  // stored state — the process is linear in its innovations, so this is exact
+  // and avoids a ~100 s lag before the slider takes effect.
   function arNoise(car, dt) {
     const rho = AR_COEFFS[params.arOrder] || AR_COEFFS[1];
     const p = rho.length;
     const sigmaInnov = arInnovationSigma();
     if (!car.arHist || car.arHist.length !== p) {
       car.arHist = stationaryArHistory(rho, sigmaInnov);
+      car.arSigma = sigmaInnov;
+    } else if (car.arSigma !== sigmaInnov) {
+      if (car.arSigma > 0) {
+        const k = sigmaInnov / car.arSigma;
+        for (let i = 0; i < p; i++) car.arHist[i] *= k;
+      } else {
+        car.arHist = stationaryArHistory(rho, sigmaInnov);
+      }
+      car.arSigma = sigmaInnov;
     }
     car.arAccum = (car.arAccum || 0) + dt;
     while (car.arAccum >= FRAME_DT) {
@@ -321,6 +340,14 @@
   let cars = [];        // {s: position along ring (m), v: speed (m/s), color, perturb?}
   let paused = false;
   let lastTime = performance.now();
+
+  // Simulation-time accumulators. Declared here (rather than next to the render
+  // loop) so that initCars() can zero them without hitting a temporal dead zone.
+  const STATS_INTERVAL = 0.1;  // sim seconds between chart samples
+  const ST_INTERVAL = 0.25;    // sim seconds between time-space columns
+  let chartAccum = 0;
+  let stAccum = 0;
+  let physAccum = 0;           // sim time not yet consumed by an integration step
 
   // ---------- setup ----------
   function circumference() { return 2 * Math.PI * params.radius; }
@@ -363,7 +390,9 @@
   function initCars() {
     // Refuse packings that cannot physically exist. Without this the ring
     // starts already overlapping and no collision handling can recover it.
-    const nMax = maxFeasibleCars();
+    // Also stay within the schema bound, so a runtime-widened slider cannot
+    // produce a value that the URL/localStorage validator would later reject.
+    const nMax = Math.min(PARAM_SCHEMA.numCars.max, maxFeasibleCars());
     if (params.numCars > nMax) {
       params.numCars = nMax;
       const el = document.getElementById("numCars");
@@ -378,8 +407,6 @@
     // Start on the IDM equilibrium branch for this density, so a run is not
     // dominated by a large deterministic relaxation transient.
     const vInit = equilibriumSpeed(spacing - params.carLength);
-    const rho = AR_COEFFS[params.arOrder] || AR_COEFFS[1];
-    const sigmaInnov = arInnovationSigma();
     for (let i = 0; i < n; i++) {
       cars.push({
         s: i * spacing,
@@ -387,13 +414,20 @@
         color: colorFor(i, n),
         perturbUntil: 0,
         gp: sampleGPFeatures(params.gpEll, params.gpKernel),
-        arHist: stationaryArHistory(rho, sigmaInnov),
+        // Left empty on purpose: arNoise() builds the stationary state lazily,
+        // so no burn-in is paid in GP/White mode or while dragging a slider.
+        arHist: [],
         arAccum: 0,
         whiteVal: params.gpSigma * randn(),
         whiteAccum: 0,
       });
     }
     simTime = 0;
+    // A fresh run starts from a clean clock; otherwise leftover accumulator
+    // fractions carry a previous run's phase into the new one.
+    physAccum = 0;
+    chartAccum = 0;
+    stAccum = 0;
   }
 
   // ---------- IDM ----------
@@ -439,31 +473,43 @@
       accels[i] = acc;
     }
 
+    // Unwrapped coordinates of the platoon as it stood at the start of the
+    // step. The array was sorted by s above, so consecutive differences are the
+    // true gaps and this is an exact linear picture of the ring cut open at
+    // cars[0].
+    const uPrev = new Array(n);
+    uPrev[0] = cars[0].s;
+    for (let i = 1; i < n; i++) uPrev[i] = uPrev[i - 1] + (cars[i].s - cars[i - 1].s);
+
+    const u = new Array(n);
     for (let i = 0; i < n; i++) {
       const c = cars[i];
       c.v = Math.max(0, c.v + accels[i] * dt);
-      c.s = (c.s + c.v * dt) % L;
-      if (c.s < 0) c.s += L;
+      u[i] = uPrev[i] + c.v * dt;
     }
 
-    // Hard clamp: physically prevent overlap. Bumper-to-bumper gap must stay
-    // >= s0. Iterating in descending index order propagates the correction
-    // backwards along the platoon (pushing car i back tightens the gap for car
-    // i-1, processed next); a second pass closes the wrap-around seam.
+    // Hard clamp: physically prevent overlap, keeping the bumper-to-bumper gap
+    // at or above s0. This MUST be done in unwrapped coordinates. A modular gap
+    // cannot distinguish "my leader is far ahead" from "my leader is now behind
+    // me": once a follower is pushed past its leader the modular gap wraps to
+    // ~L and looks perfectly safe, so the inversion becomes permanent. In
+    // unwrapped space the gap is signed and the ordering is explicit.
+    // Descending order propagates a correction backwards along the platoon; a
+    // second pass closes the wrap-around seam.
+    const cl = params.carLength;
     const minGap = params.s0;
-    for (let pass = 0; pass < 4; pass++) {
-      let fixed = 0;
+    for (let pass = 0; pass < 2; pass++) {
       for (let i = n - 1; i >= 0; i--) {
-        const me = cars[i];
+        const leadU = (i === n - 1) ? u[0] + L : u[i + 1];
+        if (leadU - u[i] - cl >= minGap) continue;
+        u[i] = leadU - cl - minGap;
         const lead = cars[(i + 1) % n];
-        if (ringGap(lead.s, me.s, L) >= minGap) continue;
-        let target = lead.s - params.carLength - minGap;
-        target = ((target % L) + L) % L;
-        me.s = target;
-        if (me.v > lead.v) me.v = lead.v;
-        fixed++;
+        if (cars[i].v > lead.v) cars[i].v = lead.v;
       }
-      if (!fixed) break;
+    }
+    for (let i = 0; i < n; i++) {
+      const s = u[i] % L;
+      cars[i].s = s < 0 ? s + L : s;
     }
     simTime += dt;
   }
@@ -684,12 +730,15 @@
     statDens.textContent = densPerKm.toFixed(1);
     statFlow.textContent = Math.round(flowPerHr);
 
-    // Live a11y label for the canvas (low-frequency update — matches stats cadence).
-    canvas.setAttribute(
-      "aria-label",
-      `Ring road; ${cars.length} cars; average speed ${avgAll.toFixed(1)} m/s; ` +
-      `density ${densPerKm.toFixed(1)} cars per km; flow ${Math.round(flowPerHr)} cars per hour.`
-    );
+    // Live a11y label for the canvas. Only refreshed on the sampling schedule,
+    // not every animation frame.
+    if (record) {
+      canvas.setAttribute(
+        "aria-label",
+        `Ring road; ${cars.length} cars; average speed ${avgAll.toFixed(1)} m/s; ` +
+        `density ${densPerKm.toFixed(1)} cars per km; flow ${Math.round(flowPerHr)} cars per hour.`
+      );
+    }
 
     // Everything below appends to a history buffer, so it must only run on the
     // fixed simulation-time schedule — never per animation frame, and never
@@ -736,7 +785,7 @@
   }
 
   // ---------- charts ----------
-  const MAX_POINTS = 600; // ~ last 20s at 30fps updates, but we throttle below
+  const MAX_POINTS = 600; // 600 samples x STATS_INTERVAL (0.1 s) = a 60 s window
   const chartData = {
     speed: [],
     flow: [],
@@ -1188,16 +1237,11 @@
   // animation frame. Sampling per frame made the chart window depend on the
   // monitor refresh rate and the playback multiplier (and kept overwriting the
   // buffers with duplicates while paused). 600 points × 0.1 s = the 60 s window
-  // the axis labels claim.
-  const STATS_INTERVAL = 0.1;  // sim seconds between chart samples
-  const ST_INTERVAL = 0.25;    // sim seconds between time-space columns
-  let chartAccum = 0;
-  let stAccum = 0;
-  let physAccum = 0;   // accumulates sim-time until the next integration step
+  // the axis labels claim. STATS_INTERVAL / ST_INTERVAL and the accumulators
+  // are declared near the top of the module.
   function tick(now) {
     const rawDt = Math.min(0.05, (now - lastTime) / 1000);
     lastTime = now;
-    let record = false;
     if (!paused) {
       const simDt = rawDt * params.speedMul;
       physAccum += simDt;
@@ -1208,21 +1252,24 @@
         step(params.dtStep);
         physAccum -= params.dtStep;
         work++;
+        // Sample diagnostics from INSIDE the physics loop, so that a fast
+        // playback multiplier produces more samples instead of dropping them.
+        // The rate is naturally capped at one sample per integration step.
+        chartAccum += params.dtStep;
+        stAccum += params.dtStep;
+        if (chartAccum >= STATS_INTERVAL) {
+          chartAccum %= STATS_INTERVAL;
+          updateStats(true);
+        }
+        if (stAccum >= ST_INTERVAL) {
+          stAccum %= ST_INTERVAL;
+          pushSTRow();
+        }
       }
       if (work >= 200) physAccum = 0;  // shed the backlog rather than fall behind forever
-      chartAccum += simDt;
-      stAccum += simDt;
-      if (chartAccum >= STATS_INTERVAL) {
-        record = true;
-        chartAccum %= STATS_INTERVAL;
-      }
-      while (stAccum >= ST_INTERVAL) {
-        pushSTRow();
-        stAccum -= ST_INTERVAL;
-      }
     }
     draw();
-    updateStats(record);
+    updateStats(false);   // refresh the live read-outs only; appends nothing
 
     if (now - lastChartDraw > 100) {
       drawCharts();
@@ -1375,7 +1422,7 @@
   const numCarsEl = document.getElementById("numCars");
   const numCarsLbl = document.getElementById("numCarsVal");
   function syncFeasibleCars() {
-    const nMax = maxFeasibleCars();
+    const nMax = Math.min(PARAM_SCHEMA.numCars.max, maxFeasibleCars());
     numCarsEl.max = String(nMax);
     if (params.numCars > nMax) {
       params.numCars = nMax;
