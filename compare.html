@@ -165,9 +165,10 @@
       <p class="chart-cap">
         White noise: spike at τ=0, then within the ±2/√N band (grey dashed, 95% CI under i.i.d. noise).
         AR / GP: slow decay — the <em>temporal correlation</em> that distinguishes them from white noise.
-        Per Zhang, Wang &amp; Sun (2024) the AR residual is positively correlated over roughly the first
-        5 s and turns <em>negative</em> between about 5 and 10 s; the window below shows only the first
-        6 s, so that negative lobe is largely off-scale here.
+        The window runs to 12 s so that the DR-IDM signature is visible: per Zhang, Wang &amp; Sun (2024)
+        the AR residual is positively correlated over roughly the first 5 s and turns <em>negative</em>
+        between about 5 and 10 s. Each curve is drawn only out to a quarter of its available sample
+        length, so it extends as the run accumulates data.
       </p>
       <canvas id="chartAcf" width="900" height="260" role="img"
               aria-label="Empirical autocorrelation function of eta(t) for each noise model, with the plus or minus two over square-root N white-noise confidence band overlaid."></canvas>
@@ -176,7 +177,7 @@
     <div class="chart-card">
       <h3>Fundamental diagram — flow vs density</h3>
       <p class="chart-cap">
-        Each dot is one instantaneous sample of (density, flow) taken on the whole ring,
+        Each dot is one instantaneous sample of (density, flow) taken on a quarter of the ring,
         with flow computed as density × space-mean speed. Correlated noise widens the
         scatter. The dots are not time-ordered, so this panel shows the spread of
         flow–density states, not a hysteresis trajectory.

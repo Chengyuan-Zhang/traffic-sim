@@ -165,7 +165,7 @@
         <div class="control">
           <label for="gpSigma">σ — noise scale (m/s²): <span id="gpSigmaVal">0.20</span></label>
           <input type="range" id="gpSigma" min="0" max="1.0" value="0.20" step="0.05"
-                 title="Noise amplitude on the IDM acceleration residual η(t). Meaning depends on the noise model: marginal std for GP and White, innovation std for AR(p)." />
+                 title="Marginal standard deviation of the IDM acceleration residual η(t). Means the same thing in all three noise models, so they are directly comparable." />
         </div>
         <div class="control" id="kernelRow">
           <label for="gpKernel">Kernel</label>
@@ -234,9 +234,14 @@
               aria-label="Time series of the traffic density (cars per kilometre) inside the measuring region."></canvas>
     </div>
     <div class="chart-card">
-      <h3>Fundamental diagram <span class="unit">(flow vs density, region sub-bins)</span></h3>
+      <h3>Fundamental diagram <span class="unit">(flow vs density)</span></h3>
       <canvas id="chartFD" width="600" height="240" role="img"
-              aria-label="Fundamental diagram: scatter of flow versus density sampled from the measuring-region sub-bins, with the IDM equilibrium curve overlaid for reference."></canvas>
+              aria-label="Fundamental diagram: the blue line is the time trajectory of the whole measuring arc, the faint dots are a spatial cross-section from four sub-bins, and the dashed curve is the IDM equilibrium relation for reference."></canvas>
+      <p class="chart-cap">
+        The line is the measuring arc's <em>time</em> trajectory, so its loops are real
+        loading/unloading cycles. The faint dots are four spatial sub-bins sampled at
+        the same instants — a cross-section, deliberately left unconnected.
+      </p>
     </div>
     <div class="chart-card chart-wide">
       <h3>Time–space diagram <span class="unit">(time →, position ↑; colour = local speed)</span></h3>

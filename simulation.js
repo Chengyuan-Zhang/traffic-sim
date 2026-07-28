@@ -85,23 +85,60 @@
   };
 
   // ---------- Load params from URL hash + localStorage (URL > storage > defaults) ----------
-  const STRING_KEYS = new Set(["gpKernel", "noiseMode"]);
+  // Every field is validated against a typed schema before use. Hash and
+  // localStorage are user-controlled, and an out-of-range value can otherwise
+  // break the simulation (e.g. dtStep = 0, or an AR order with no coefficients).
+  const PARAM_SCHEMA = {
+    numCars:      { type: "int",  min: 5,    max: 80   },
+    v0:           { type: "num",  min: 5,    max: 40   },
+    T:            { type: "num",  min: 0.3,  max: 3.0  },
+    a:            { type: "num",  min: 0.2,  max: 3.0  },
+    b:            { type: "num",  min: 0.5,  max: 5.0  },
+    s0:           { type: "num",  min: 0.5,  max: 10.0 },
+    delta:        { type: "num",  min: 1,    max: 10   },
+    carLength:    { type: "num",  min: 1,    max: 20   },
+    radius:       { type: "num",  min: 60,   max: 250  },
+    speedMul:     { type: "num",  min: 0.25, max: 10   },
+    dtStep:       { type: "num",  min: 0.02, max: 2.0  },
+    gpSigma:      { type: "num",  min: 0,    max: 1.0  },
+    gpEll:        { type: "num",  min: 0.1,  max: 5.0  },
+    gpKernel:     { type: "enum", values: ["rbf", "matern52", "matern32", "matern12"] },
+    noiseMode:    { type: "enum", values: ["gp", "ar", "white"] },
+    arOrder:      { type: "enum", values: [1, 2, 3, 4, 5, 6, 7], numeric: true },
+    regionCenter: { type: "num",  min: 0,    max: 359  },
+    regionSpan:   { type: "num",  min: 10,   max: 360  },
+    seed:         { type: "int",  min: 0,    max: 2147483647 },
+  };
+  // Bump when a stored parameter's default or meaning changes, so a returning
+  // visitor's localStorage does not pin them to a stale value.
+  // v2: GP lengthscale default 1.4 -> 1.44 s; σ is now the marginal std in
+  //     every noise mode (it used to be the AR innovation std).
+  const PARAM_VERSION = 2;
   function coerceParam(k, v) {
-    if (STRING_KEYS.has(k)) return String(v);
-    const n = Number(v);
-    return Number.isFinite(n) ? n : v;
+    const spec = PARAM_SCHEMA[k];
+    if (!spec) return undefined;
+    if (spec.type === "enum") {
+      const cand = spec.numeric ? Number(v) : String(v);
+      return spec.values.includes(cand) ? cand : undefined;
+    }
+    let n = Number(v);
+    if (!Number.isFinite(n)) return undefined;
+    if (spec.type === "int") n = Math.round(n);
+    return Math.min(spec.max, Math.max(spec.min, n));
+  }
+  function applyParams(entries) {
+    for (const [k, v] of entries) {
+      if (!(k in params)) continue;
+      const c = coerceParam(k, v);
+      if (c !== undefined) params[k] = c;
+    }
   }
   try {
     const stored = JSON.parse(localStorage.getItem("traffic-sim-params") || "{}");
-    for (const [k, v] of Object.entries(stored)) {
-      if (k in params) params[k] = coerceParam(k, v);
-    }
+    if (stored.__v === PARAM_VERSION) applyParams(Object.entries(stored));
   } catch (_) { /* ignore corrupted localStorage */ }
   try {
-    const hash = new URLSearchParams((location.hash || "").slice(1));
-    for (const [k, v] of hash.entries()) {
-      if (k in params) params[k] = coerceParam(k, v);
-    }
+    applyParams(new URLSearchParams((location.hash || "").slice(1)).entries());
   } catch (_) { /* ignore malformed hash */ }
   if (params.seed && params.seed > 0) rand = mulberry32(params.seed | 0);
 
@@ -114,7 +151,10 @@
         const q = new URLSearchParams();
         for (const [k, v] of Object.entries(params)) q.set(k, String(v));
         history.replaceState(null, "", "#" + q.toString());
-        localStorage.setItem("traffic-sim-params", JSON.stringify(params));
+        localStorage.setItem(
+          "traffic-sim-params",
+          JSON.stringify(Object.assign({ __v: PARAM_VERSION }, params))
+        );
       } catch (_) { /* best-effort */ }
     }, 200);
   }
@@ -123,13 +163,14 @@
   // Keys = AR order p; values = [rho_1, rho_2, ..., rho_p]. Table 1 also reports
   // p = 8; the paper compares covariance functions up to p = 10.
   //
-  // CAVEAT: when noise mode is "ar", `sigma` is the INNOVATION std, whereas for
-  // "gp" and "white" it is the MARGINAL std. Solving Yule-Walker for these rho
-  // gives a stationary std of 6.76x (p=1), 7.17x (p=2), 8.50x, 8.79x, 8.91x,
-  // 9.42x and 10.27x (p=7) the innovation std, so the same slider value produces
-  // a much noisier process in AR mode. The paper's own sigma_eta (0.019 -> 0.014)
-  // is NOT "too small to see": it implies a marginal std of about 0.14 m/s^2,
-  // the same order as MA-IDM's sigma_k = 0.202 and B-IDM's sigma_eps = 0.240.
+  // CAVEAT: Table 1 reports σ_η as an INNOVATION std. Solving Yule-Walker for
+  // these rho gives a stationary std of 6.76x (p=1), 7.17x (p=2), 8.50x, 8.79x,
+  // 8.91x, 9.42x and 10.27x (p=7) the innovation std. The simulator's sigma
+  // slider is a MARGINAL std, so arInnovationSigma() divides by that factor —
+  // otherwise AR mode would be ~9x noisier than GP or White at the same slider
+  // value, which is not a property of the model. For reference, the paper's own
+  // sigma_eta (0.019 -> 0.014) implies a marginal std of about 0.14 m/s^2, the
+  // same order as MA-IDM's sigma_k = 0.202 and B-IDM's sigma_eps = 0.240.
   const AR_COEFFS = {
     1: [0.989],
     2: [1.234, -0.247],
@@ -140,8 +181,22 @@
     7: [0.866,  0.690, -0.001, -0.413, -0.378, -0.032,  0.248],
   };
 
-  // Paper downsamples HighD to 5 fps, so 1 frame = 0.2 s (used by AR update cadence)
+  // Paper downsamples HighD to 5 fps, so 1 frame = 0.2 s. Used as the update
+  // cadence for BOTH the AR(p) process and the white-noise process: the papers'
+  // σ values are standard deviations of residuals defined on that grid, so
+  // holding a sample over 0.2 s (rather than redrawing it every integration
+  // step) keeps the noise strength independent of Δt.
   const FRAME_DT = 0.2;
+
+  // Stationary standard deviation of the AR(p) process per unit innovation
+  // standard deviation, from the Yule–Walker (discrete Lyapunov) solution for
+  // the coefficients above. Used to express the σ slider as a MARGINAL standard
+  // deviation in every noise mode, so that GP, AR and White are comparable at
+  // the same slider value.
+  const AR_MARGINAL = {
+    1: 6.7606, 2: 7.1656, 3: 8.5043, 4: 8.7932,
+    5: 8.9104, 6: 9.4167, 7: 10.2738,
+  };
 
   // Random Fourier Features for a zero-mean GP with RBF kernel
   //   k(t,t') = sigma^2 * exp(-(t-t')^2 / (2*ell^2))
@@ -199,22 +254,58 @@
     return params.gpSigma * Math.sqrt(2 / GP_M) * s;
   }
 
-  function whiteNoise() {
-    // B-IDM baseline: i.i.d. Gaussian at each sim step
-    return params.gpSigma * randn();
+  // B-IDM baseline: i.i.d. Gaussian residual on the papers' 0.2 s grid.
+  // The sample is held over FRAME_DT rather than redrawn every integration
+  // step, so the effective noise power does not scale with Δt (which would
+  // otherwise change by 100× across the Δt slider and make the three noise
+  // models incomparable). σ is the marginal std.
+  function whiteNoise(car, dt) {
+    if (car.whiteVal === undefined) car.whiteVal = params.gpSigma * randn();
+    car.whiteAccum = (car.whiteAccum || 0) + dt;
+    while (car.whiteAccum >= FRAME_DT) {
+      car.whiteVal = params.gpSigma * randn();
+      car.whiteAccum -= FRAME_DT;
+    }
+    return car.whiteVal;
+  }
+
+  // Innovation std that makes the AR(p) process have MARGINAL std = params.gpSigma,
+  // so the slider means the same thing here as it does for GP and White.
+  function arInnovationSigma() {
+    const f = AR_MARGINAL[params.arOrder] || AR_MARGINAL[1];
+    return params.gpSigma / f;
+  }
+
+  // Draw an AR(p) state from (an accurate approximation of) its stationary
+  // distribution. Starting from zeros biases early statistics low — with
+  // ρ = [0.989] the variance needs ~42 s to reach 99 % of its stationary value.
+  function stationaryArHistory(rho, sigmaInnov) {
+    const p = rho.length;
+    const hist = new Array(p).fill(0);
+    for (let t = 0; t < 1000; t++) {
+      let mean = 0;
+      for (let k = 0; k < p; k++) mean += rho[k] * hist[k];
+      const next = mean + sigmaInnov * randn();
+      for (let k = p - 1; k > 0; k--) hist[k] = hist[k - 1];
+      hist[0] = next;
+    }
+    return hist;
   }
 
   // AR(p) with fixed paper coefficients: eps_t = sum_k rho_k * eps_{t-k} + innov
-  // Updates at the paper's 5 fps cadence (FRAME_DT = 0.2 s). Innovation std = sigma.
+  // Updates at the paper's 5 fps cadence (FRAME_DT = 0.2 s).
   function arNoise(car, dt) {
     const rho = AR_COEFFS[params.arOrder] || AR_COEFFS[1];
     const p = rho.length;
-    if (!car.arHist || car.arHist.length !== p) car.arHist = new Array(p).fill(0);
+    const sigmaInnov = arInnovationSigma();
+    if (!car.arHist || car.arHist.length !== p) {
+      car.arHist = stationaryArHistory(rho, sigmaInnov);
+    }
     car.arAccum = (car.arAccum || 0) + dt;
     while (car.arAccum >= FRAME_DT) {
       let mean = 0;
       for (let k = 0; k < p; k++) mean += rho[k] * car.arHist[k];
-      const next = mean + params.gpSigma * randn();
+      const next = mean + sigmaInnov * randn();
       // shift history: arHist[0] is the most recent
       for (let k = p - 1; k > 0; k--) car.arHist[k] = car.arHist[k - 1];
       car.arHist[0] = next;
@@ -239,20 +330,67 @@
     return `hsl(${hue}, 70%, 60%)`;
   }
 
+  // Bumper-to-bumper gap from `me` to its leader on a ring of length L.
+  // The modulo must be applied to the *centre* distance before subtracting the
+  // vehicle length. Subtracting first and then adding L when the result is
+  // negative turns a genuine overlap (centre distance < carLength) into a
+  // nearly-full-lap gap, so IDM sees an empty road and the overlap clamp below
+  // silently does nothing. Returns a negative value when vehicles overlap.
+  function ringGap(leadS, meS, L) {
+    const centre = (((leadS - meS) % L) + L) % L;
+    return centre - params.carLength;
+  }
+
+  // Largest vehicle count that physically fits: N*(carLength + s0) <= L.
+  function maxFeasibleCars() {
+    return Math.max(2, Math.floor(circumference() / (params.carLength + params.s0)));
+  }
+
+  // IDM equilibrium speed for a steady state with net gap `s` (Δv = 0):
+  // solves 1 - (v/v0)^δ - ((s0 + vT)/s)^2 = 0, strictly decreasing on [0, v0].
+  function equilibriumSpeed(s) {
+    const { v0, T, s0, delta } = params;
+    if (!(s > s0) || !(v0 > 0)) return 0;
+    let lo = 0, hi = v0;
+    for (let i = 0; i < 60; i++) {
+      const m = 0.5 * (lo + hi);
+      const f = 1 - Math.pow(m / v0, delta) - Math.pow((s0 + m * T) / s, 2);
+      if (f > 0) lo = m; else hi = m;
+    }
+    return 0.5 * (lo + hi);
+  }
+
   function initCars() {
+    // Refuse packings that cannot physically exist. Without this the ring
+    // starts already overlapping and no collision handling can recover it.
+    const nMax = maxFeasibleCars();
+    if (params.numCars > nMax) {
+      params.numCars = nMax;
+      const el = document.getElementById("numCars");
+      const lbl = document.getElementById("numCarsVal");
+      if (el) el.value = String(nMax);
+      if (lbl) lbl.textContent = String(nMax);
+    }
     cars = [];
     const L = circumference();
     const n = params.numCars;
     const spacing = L / n;
+    // Start on the IDM equilibrium branch for this density, so a run is not
+    // dominated by a large deterministic relaxation transient.
+    const vInit = equilibriumSpeed(spacing - params.carLength);
+    const rho = AR_COEFFS[params.arOrder] || AR_COEFFS[1];
+    const sigmaInnov = arInnovationSigma();
     for (let i = 0; i < n; i++) {
       cars.push({
         s: i * spacing,
-        v: params.v0 * 0.8,
+        v: vInit,
         color: colorFor(i, n),
         perturbUntil: 0,
         gp: sampleGPFeatures(params.gpEll, params.gpKernel),
-        arHist: [],
+        arHist: stationaryArHistory(rho, sigmaInnov),
         arAccum: 0,
+        whiteVal: params.gpSigma * randn(),
+        whiteAccum: 0,
       });
     }
     simTime = 0;
@@ -276,17 +414,18 @@
     for (let i = 0; i < n; i++) {
       const me = cars[i];
       const lead = cars[(i + 1) % n];
-      let gap = lead.s - me.s - params.carLength;
-      if (gap < 0) gap += L;
+      const gap = ringGap(lead.s, me.s, L);
       let acc = idmAccel(me.v, lead.v, gap);
 
       // Driver noise: GP (MA-IDM), AR(p) (DR-IDM), or white (B-IDM baseline).
+      // σ is the MARGINAL std in every mode (the AR innovation is divided by the
+      // Yule–Walker factor), so the three are comparable at the same slider value.
       // Soft-saturate at ±5 m/s²: a human driver physically cannot impose larger
       // acceleration errors, and this keeps large-σ runs bounded without solely
       // relying on the hard overlap clamp below. tanh is smooth & symmetric.
       if (params.gpSigma > 0) {
         let eta;
-        if (params.noiseMode === "white") eta = whiteNoise();
+        if (params.noiseMode === "white") eta = whiteNoise(me, dt);
         else if (params.noiseMode === "ar") eta = arNoise(me, dt);
         else eta = gpNoise(me);
         const ETAMAX = 5.0;
@@ -307,21 +446,24 @@
       if (c.s < 0) c.s += L;
     }
 
-    // Hard clamp: physically prevent overlap. Even with noise or large dt,
-    // bumper-to-bumper gap must stay >= s0. If a follower has caught up,
-    // pull it back to lead.s - carLength - s0 and drop its speed to match.
+    // Hard clamp: physically prevent overlap. Bumper-to-bumper gap must stay
+    // >= s0. Iterating in descending index order propagates the correction
+    // backwards along the platoon (pushing car i back tightens the gap for car
+    // i-1, processed next); a second pass closes the wrap-around seam.
     const minGap = params.s0;
-    for (let i = 0; i < n; i++) {
-      const me = cars[i];
-      const lead = cars[(i + 1) % n];
-      let gap = lead.s - me.s - params.carLength;
-      if (gap < 0) gap += L;
-      if (gap < minGap) {
+    for (let pass = 0; pass < 4; pass++) {
+      let fixed = 0;
+      for (let i = n - 1; i >= 0; i--) {
+        const me = cars[i];
+        const lead = cars[(i + 1) % n];
+        if (ringGap(lead.s, me.s, L) >= minGap) continue;
         let target = lead.s - params.carLength - minGap;
-        if (target < 0) target += L;
+        target = ((target % L) + L) % L;
         me.s = target;
         if (me.v > lead.v) me.v = lead.v;
+        fixed++;
       }
+      if (!fixed) break;
     }
     simTime += dt;
   }
@@ -513,7 +655,7 @@
     return Math.abs(d) <= halfLen;
   }
 
-  function updateStats() {
+  function updateStats(record) {
     if (!cars.length) return;
     const L = circumference();
     const sCenter = (params.regionCenter / 360) * L;
@@ -549,13 +691,24 @@
       `density ${densPerKm.toFixed(1)} cars per km; flow ${Math.round(flowPerHr)} cars per hour.`
     );
 
+    // Everything below appends to a history buffer, so it must only run on the
+    // fixed simulation-time schedule — never per animation frame, and never
+    // while paused (which would overwrite the whole window with duplicates).
+    if (!record) return;
+
     // Region-scoped time series
     chartData.speed.push(avgReg);
     chartData.flow.push(flowPerHr);
     chartData.density.push(densPerKm);
 
-    // Fundamental diagram: split the measuring region into sub-bins so we
-    // get a scatter (otherwise a single region gives one point per update).
+    // Fundamental diagram.
+    // `fd` is a genuine time trajectory of ONE detector — the whole measuring
+    // arc — so consecutive entries are consecutive instants and connecting them
+    // is meaningful. `fdScatter` holds the four spatial sub-bins, which enrich
+    // the cloud but are four *places* at a single instant; connecting those
+    // would manufacture loops that look like hysteresis but are not.
+    if (nReg > 0) chartData.fd.push({ k: densPerKm, q: flowPerHr });
+
     const NBINS = 4;
     const binLen = regionLen / NBINS;
     if (binLen > 0) {
@@ -576,7 +729,7 @@
         const kLocal = (counts[b] / binLen) * 1000;
         const vLocal = sums[b] / counts[b];
         const qLocal = kLocal * vLocal * 3.6;
-        chartData.fd.push({ k: kLocal, q: qLocal });
+        chartData.fdScatter.push({ k: kLocal, q: qLocal });
       }
     }
     trimBuffers();
@@ -588,16 +741,19 @@
     speed: [],
     flow: [],
     density: [],
-    fd: [],
+    fd: [],         // whole-arc detector, time-ordered (safe to connect)
+    fdScatter: [],  // spatial sub-bins, cross-sectional (never connect)
   };
   function trimBuffers() {
     for (const k of ["speed", "flow", "density"]) {
       const arr = chartData[k];
       if (arr.length > MAX_POINTS) arr.splice(0, arr.length - MAX_POINTS);
     }
-    // FD scatter: cap at 2000 so the per-frame polyline stays cheap on long runs.
+    // Cap the FD buffers so the per-frame polyline stays cheap on long runs.
     const fd = chartData.fd;
     if (fd.length > 2000) fd.splice(0, fd.length - 2000);
+    const sc = chartData.fdScatter;
+    if (sc.length > 4000) sc.splice(0, sc.length - 4000);
   }
 
   const cSpeed = document.getElementById("chartSpeed");
@@ -676,9 +832,10 @@
     cx.fill();
 
     // Time-axis labels at the left and right edges of the trace so the viewer
-    // knows the time span of the visible buffer (~ 60 s at 10 Hz update).
-    // opts.windowSec lets callers override the label; default MAX_POINTS / 10Hz.
-    const windowSec = (opts && opts.windowSec) || Math.round(MAX_POINTS / 10);
+    // knows the time span of the visible buffer. Derived from the sampling
+    // schedule so the label cannot drift away from the data.
+    // opts.windowSec lets callers override the label.
+    const windowSec = (opts && opts.windowSec) || Math.round(MAX_POINTS * STATS_INTERVAL);
     cx.fillStyle = "rgba(230,237,243,0.45)";
     cx.font = "10px -apple-system, Segoe UI, sans-serif";
     cx.textBaseline = "bottom";
@@ -755,9 +912,10 @@
   }
 
   function updateFDAxes() {
-    const pts = chartData.fd;
     let mk = 0, mq = 0;
-    for (const p of pts) { if (p.k > mk) mk = p.k; if (p.q > mq) mq = p.q; }
+    for (const arr of [chartData.fd, chartData.fdScatter]) {
+      for (const p of arr) { if (p.k > mk) mk = p.k; if (p.q > mq) mq = p.q; }
+    }
     // Include equilibrium curve extent so the reference curve is always visible.
     for (const p of computeEquilibriumCurve()) {
       if (p.k > mk) mk = p.k;
@@ -808,9 +966,10 @@
       xFD.fillText("IDM equilibrium q(ρ)", kToX(peak.k) + 6, Math.max(12, qToY(peak.q) - 4));
     }
 
-    // Hysteresis polyline: connect the (decimated) trajectory so the (ρ, q)
-    // loop during jam formation/dissipation is visible. Faint for the long
-    // tail, bolder for the last ~40 points so recent motion is easy to follow.
+    // Trajectory polyline for the measuring arc as a whole. These points ARE a
+    // time series (one per stats update), so connecting them shows genuine
+    // loading/unloading loops. The spatial sub-bin cloud below is deliberately
+    // left unconnected. Faint for the long tail, bolder for the last ~40 points.
     const pts = chartData.fd;
     const n = pts.length;
     const TAIL = 40;
@@ -843,6 +1002,17 @@
         if (i === startRecent) xFD.moveTo(x, y); else xFD.lineTo(x, y);
       }
       xFD.stroke();
+    }
+
+    // Cross-sectional cloud from the four spatial sub-bins — dots only, never
+    // connected: these are four places at one instant, not four instants.
+    const sc = chartData.fdScatter;
+    xFD.fillStyle = "rgba(79,195,247,0.22)";
+    for (let i = 0; i < sc.length; i++) {
+      const p = sc[i];
+      xFD.beginPath();
+      xFD.arc(kToX(p.k), qToY(p.q), 1.6, 0, Math.PI * 2);
+      xFD.fill();
     }
 
     // Scatter — older points fade (alpha = 0.15 → 0.85 over the buffer).
@@ -1014,12 +1184,20 @@
   }
 
   // ---------- loop ----------
+  // Diagnostics are sampled on a fixed SIMULATION-time schedule, not per
+  // animation frame. Sampling per frame made the chart window depend on the
+  // monitor refresh rate and the playback multiplier (and kept overwriting the
+  // buffers with duplicates while paused). 600 points × 0.1 s = the 60 s window
+  // the axis labels claim.
+  const STATS_INTERVAL = 0.1;  // sim seconds between chart samples
+  const ST_INTERVAL = 0.25;    // sim seconds between time-space columns
   let chartAccum = 0;
   let stAccum = 0;
   let physAccum = 0;   // accumulates sim-time until the next integration step
   function tick(now) {
     const rawDt = Math.min(0.05, (now - lastTime) / 1000);
     lastTime = now;
+    let record = false;
     if (!paused) {
       const simDt = rawDt * params.speedMul;
       physAccum += simDt;
@@ -1031,16 +1209,21 @@
         physAccum -= params.dtStep;
         work++;
       }
+      if (work >= 200) physAccum = 0;  // shed the backlog rather than fall behind forever
       chartAccum += simDt;
       stAccum += simDt;
+      if (chartAccum >= STATS_INTERVAL) {
+        record = true;
+        chartAccum %= STATS_INTERVAL;
+      }
+      while (stAccum >= ST_INTERVAL) {
+        pushSTRow();
+        stAccum -= ST_INTERVAL;
+      }
     }
     draw();
-    updateStats();
+    updateStats(record);
 
-    if (stAccum >= 0.25) {
-      pushSTRow();
-      stAccum = 0;
-    }
     if (now - lastChartDraw > 100) {
       drawCharts();
       lastChartDraw = now;
@@ -1054,6 +1237,7 @@
     chartData.flow.length = 0;
     chartData.density.length = 0;
     chartData.fd.length = 0;
+    chartData.fdScatter.length = 0;
     xSTBuf.fillStyle = "#0e1620";
     xSTBuf.fillRect(0, 0, stBuf.width, stBuf.height);
   }
@@ -1129,16 +1313,16 @@
       + 'posterior mean is σ<sub>k</sub> = 0.202 m/s², ℓ = 1.44 s.',
     ar: 'AR(p) noise with posterior-mean coefficients ρ from Table 1 of '
       + '<a href="https://arxiv.org/abs/2307.03340" target="_blank" rel="noopener">Zhang, Wang &amp; Sun (2024) — dynamic-regression IDM</a>, '
-      + 'calibrated on HighD at 5 fps. <b>σ here is the innovation std σ<sub>η</sub>, not the '
-      + 'marginal std</b> — solving Yule–Walker, the resulting process has a marginal std '
-      + '6.8× (p = 1) to 10.3× (p = 7) larger, so this mode is far noisier than GP or White '
-      + 'at the same slider value. The paper\'s own σ<sub>η</sub> is 0.019 → 0.014 m/s², '
-      + 'giving a marginal std of about 0.14 m/s².',
+      + 'calibrated on HighD at 5 fps. <b>σ is the marginal std</b> of the resulting '
+      + 'process: the innovation is divided by the Yule–Walker factor for the chosen '
+      + 'order (6.8× at p = 1 up to 10.3× at p = 7), so this mode is directly comparable '
+      + 'with GP and White at the same slider value. The paper\'s own innovation σ<sub>η</sub> '
+      + '(0.019 → 0.014 m/s²) corresponds to a marginal std of about 0.14 m/s².',
     white: 'I.i.d. Gaussian driver noise — the Bayesian IDM (B-IDM) baseline '
       + 'used for comparison in both Zhang &amp; Sun (2024) and Zhang, Wang &amp; Sun (2024). '
       + '<b>σ is the marginal std</b> (paper posterior mean σ<sub>ε</sub> = 0.240 m/s²). '
-      + 'Note this mode re-samples every Δt, so its effective strength scales with the '
-      + 'integration step.',
+      + 'Held over the papers\' 0.2 s residual grid, so the noise strength does not '
+      + 'change when you move the Δt slider.',
   };
   if (params.noiseMode) noiseModeEl.value = params.noiseMode;
   function applyNoiseMode() {
@@ -1179,9 +1363,31 @@
     try { canvas.releasePointerCapture(e.pointerId); } catch (_) {}
   });
 
-  // numCars & radius need reinit
+  // numCars & radius need reinit. s0 also changes the feasible packing, so it
+  // participates in the feasibility check below.
   document.getElementById("numCars").addEventListener("change", initCars);
   document.getElementById("radius").addEventListener("change", initCars);
+
+  // Keep the vehicle-count slider inside the physically feasible range:
+  // no more than L / (carLength + s0) vehicles fit on a single-lane ring.
+  // Without this the ring can be initialised already overlapping, which no
+  // collision handling can recover.
+  const numCarsEl = document.getElementById("numCars");
+  const numCarsLbl = document.getElementById("numCarsVal");
+  function syncFeasibleCars() {
+    const nMax = maxFeasibleCars();
+    numCarsEl.max = String(nMax);
+    if (params.numCars > nMax) {
+      params.numCars = nMax;
+      numCarsEl.value = String(nMax);
+      if (numCarsLbl) numCarsLbl.textContent = String(nMax);
+      initCars();
+      resetCharts();
+    }
+  }
+  document.getElementById("radius").addEventListener("input", syncFeasibleCars);
+  document.getElementById("s0").addEventListener("input", syncFeasibleCars);
+  syncFeasibleCars();
 
   document.getElementById("perturb").addEventListener("click", () => {
     if (!cars.length) return;

@@ -42,6 +42,11 @@
   // ================================================================
   // Shared parameters + three sim instances running in lockstep.
   // ================================================================
+  // Bump when a stored parameter's default or meaning changes, so that a
+  // returning visitor's localStorage does not pin them to a stale value.
+  // v2: GP lengthscale default 1.6 -> 1.44 s (the value the page cites).
+  const PARAM_VERSION = 2;
+
   const params = {
     numCars: 30,
     radius: 120,
@@ -63,23 +68,55 @@
   };
 
   // ---------- Load params from URL hash + localStorage (URL > storage > defaults) ----------
-  const STRING_KEYS = new Set(["kernel"]);
+  // Every field is validated against a typed schema before it is accepted.
+  // Hash and localStorage are user-controlled: an out-of-range dtStep used to
+  // make the stepping loop spin forever, and an unsupported arOrder threw on
+  // the first frame.
+  const PARAM_SCHEMA = {
+    numCars:    { type: "int",  min: 10,   max: 60   },
+    radius:     { type: "num",  min: 60,   max: 250  },
+    v0:         { type: "num",  min: 1,    max: 60   },
+    T:          { type: "num",  min: 0.1,  max: 5    },
+    a:          { type: "num",  min: 0.1,  max: 5    },
+    b:          { type: "num",  min: 0.1,  max: 10   },
+    s0:         { type: "num",  min: 0,    max: 20   },
+    delta:      { type: "num",  min: 1,    max: 10   },
+    carLength:  { type: "num",  min: 1,    max: 20   },
+    dtStep:     { type: "num",  min: 0.01, max: 0.5  },
+    speedMul:   { type: "num",  min: 0.25, max: 10   },
+    noiseScale: { type: "num",  min: 0,    max: 8    },
+    ell:        { type: "num",  min: 0.1,  max: 5    },
+    kernel:     { type: "enum", values: ["rbf", "matern52", "matern32", "matern12"] },
+    arOrder:    { type: "enum", values: [1, 2, 3, 4, 5, 6, 7], numeric: true },
+    seed:       { type: "int",  min: 0,    max: 2147483647 },
+  };
   function coerceParam(k, v) {
-    if (STRING_KEYS.has(k)) return String(v);
-    const n = Number(v);
-    return Number.isFinite(n) ? n : v;
+    const spec = PARAM_SCHEMA[k];
+    if (!spec) return undefined;
+    if (spec.type === "enum") {
+      const cand = spec.numeric ? Number(v) : String(v);
+      return spec.values.includes(cand) ? cand : undefined;
+    }
+    let n = Number(v);
+    if (!Number.isFinite(n)) return undefined;
+    if (spec.type === "int") n = Math.round(n);
+    return Math.min(spec.max, Math.max(spec.min, n));
+  }
+  function applyStoredParams(src) {
+    for (const [k, v] of src) {
+      if (!(k in params)) continue;
+      const c = coerceParam(k, v);
+      if (c !== undefined) params[k] = c;
+    }
   }
   try {
     const stored = JSON.parse(localStorage.getItem("traffic-sim-cmp-params") || "{}");
-    for (const [k, v] of Object.entries(stored)) {
-      if (k in params) params[k] = coerceParam(k, v);
-    }
+    // Bump PARAM_VERSION whenever a default changes meaning, so returning
+    // visitors are not pinned to a stale value by their own localStorage.
+    if (stored.__v === PARAM_VERSION) applyStoredParams(Object.entries(stored));
   } catch (_) { /* ignore */ }
   try {
-    const hash = new URLSearchParams((location.hash || "").slice(1));
-    for (const [k, v] of hash.entries()) {
-      if (k in params) params[k] = coerceParam(k, v);
-    }
+    applyStoredParams(new URLSearchParams((location.hash || "").slice(1)).entries());
   } catch (_) { /* ignore */ }
   if (params.seed && params.seed > 0) rand = mulberry32(params.seed | 0);
 
@@ -91,7 +128,10 @@
         const q = new URLSearchParams();
         for (const [k, v] of Object.entries(params)) q.set(k, String(v));
         history.replaceState(null, "", "#" + q.toString());
-        localStorage.setItem("traffic-sim-cmp-params", JSON.stringify(params));
+        localStorage.setItem(
+          "traffic-sim-cmp-params",
+          JSON.stringify(Object.assign({ __v: PARAM_VERSION }, params))
+        );
       } catch (_) { /* best-effort */ }
     }, 200);
   }
@@ -126,6 +166,26 @@
     7: [0.866,  0.690, -0.001, -0.413, -0.378, -0.032,  0.248],
   };
   const FRAME_DT = 0.2;
+
+  // Stationary standard deviation of the AR(p) process per unit innovation
+  // standard deviation, from the Yule–Walker (discrete Lyapunov) solution for
+  // the coefficient vectors above. Used to put the AR residual on the same
+  // footing as the GP and white residuals when scaling plots and when the
+  // "equal marginal σ" option is selected.
+  const AR_MARGINAL = {
+    1: 6.7606, 2: 7.1656, 3: 8.5043, 4: 8.7932,
+    5: 8.9104, 6: 9.4167, 7: 10.2738,
+  };
+
+  // Marginal (stationary) standard deviation of each residual process at the
+  // current noise scale — the quantity that is actually comparable across modes.
+  function marginalSigma(mode) {
+    const s = params.noiseScale;
+    if (mode === "white") return SIGMA_WHITE * s;
+    if (mode === "gp") return SIGMA_GP * s;
+    const p = params.arOrder;
+    return (SIGMA_AR[p] || SIGMA_AR[1]) * (AR_MARGINAL[p] || AR_MARGINAL[1]) * s;
+  }
   const GP_M = 32;
 
   function randn() {
@@ -183,9 +243,25 @@
   const sims = MODES.map((m) => makeSim(m.id));
 
   function resetAll() {
+    // Reject packings that cannot physically exist: N*(carLength + s0) <= L.
+    // Without this the ring starts already overlapping and no amount of
+    // collision handling can recover a valid single-lane state.
+    const nMax = maxFeasibleCars();
+    if (params.numCars > nMax) {
+      params.numCars = nMax;
+      const el = document.getElementById("cmpN");
+      const lbl = document.getElementById("cmpNVal");
+      if (el) el.value = String(nMax);
+      if (lbl) lbl.textContent = String(nMax);
+    }
     const L = circumference();
     const n = params.numCars;
     const spacing = L / n;
+    // Start on the IDM equilibrium branch for this density so the run is not
+    // dominated by a relaxation transient from an arbitrary initial speed.
+    const v0Init = equilibriumSpeed(spacing - params.carLength);
+    const rho = AR_COEFFS[params.arOrder] || AR_COEFFS[1];
+    const sigmaInnov = (SIGMA_AR[params.arOrder] || SIGMA_AR[1]) * params.noiseScale;
     // Identical initial placements across all three sims.
     const taggedIdx = 0;
     for (const sim of sims) {
@@ -199,12 +275,14 @@
       for (let i = 0; i < n; i++) {
         sim.cars.push({
           s: i * spacing,
-          v: params.v0 * 0.8,
+          v: v0Init,
           color: colorFor(i, n),
           perturbUntil: 0,
           gp: sampleGPFeatures(params.ell, params.kernel),
-          arHist: new Array(AR_COEFFS[params.arOrder].length).fill(0),
+          arHist: stationaryArHistory(rho, sigmaInnov),
           arAccum: 0,
+          whiteVal: (SIGMA_WHITE * params.noiseScale) * randn(),
+          whiteAccum: 0,
           tagged: i === taggedIdx,
           lastEta: 0,
         });
@@ -229,7 +307,21 @@
     const sigma = SIGMA_GP * params.noiseScale;
     return sigma * Math.sqrt(2 / GP_M) * s;
   }
-  function whiteNoise() { return (SIGMA_WHITE * params.noiseScale) * randn(); }
+  // White (B-IDM) noise. The paper's σ_ε is the standard deviation of a
+  // residual defined on a 0.2 s (5 fps) grid, so the sample is *held* over that
+  // interval instead of being redrawn every integration step. Redrawing every
+  // Δt would make the physical noise power scale with Δt, which would make the
+  // three noise models incomparable whenever the step size changes.
+  function whiteNoise(car, dt) {
+    const sigma = SIGMA_WHITE * params.noiseScale;
+    if (car.whiteVal === undefined) car.whiteVal = sigma * randn();
+    car.whiteAccum = (car.whiteAccum || 0) + dt;
+    while (car.whiteAccum >= FRAME_DT) {
+      car.whiteVal = sigma * randn();
+      car.whiteAccum -= FRAME_DT;
+    }
+    return car.whiteVal;
+  }
   function arNoise(car, dt) {
     const rho = AR_COEFFS[params.arOrder] || AR_COEFFS[1];
     const p = rho.length;
@@ -247,6 +339,55 @@
     return car.arHist[0];
   }
 
+  // Bumper-to-bumper gap from `me` to its leader on a ring of length L.
+  // The modulo must be taken on the *centre* distance before subtracting the
+  // vehicle length, otherwise a genuine overlap (centre distance < carLength)
+  // is reported as a nearly-full-lap gap and neither IDM nor the overlap clamp
+  // reacts to it. Returns a negative value when the two vehicles overlap.
+  function ringGap(leadS, meS, L) {
+    const centre = (((leadS - meS) % L) + L) % L;
+    return centre - params.carLength;
+  }
+
+  // Largest vehicle count that physically fits: N*(carLength + s0) <= L.
+  function maxFeasibleCars() {
+    return Math.max(2, Math.floor(circumference() / (params.carLength + params.s0)));
+  }
+
+  // IDM equilibrium speed for a steady state with net gap `s` (Δv = 0).
+  // Solves 1 - (v/v0)^δ - ((s0 + vT)/s)^2 = 0, which is strictly decreasing on
+  // [0, v0]. Used so runs start on the equilibrium branch instead of relaxing
+  // to it from an arbitrary initial speed.
+  function equilibriumSpeed(s) {
+    const { v0, T, s0, delta } = params;
+    if (!(s > s0) || !(v0 > 0)) return 0;
+    let lo = 0, hi = v0;
+    for (let i = 0; i < 60; i++) {
+      const m = 0.5 * (lo + hi);
+      const f = 1 - Math.pow(m / v0, delta) - Math.pow((s0 + m * T) / s, 2);
+      if (f > 0) lo = m; else hi = m;
+    }
+    return 0.5 * (lo + hi);
+  }
+
+  // Draw an AR(p) state from (a close approximation of) its stationary
+  // distribution. Starting from zeros biases early statistics low: with
+  // ρ = [0.989] the process needs ~42 s to reach 99 % of its stationary
+  // variance, which is longer than a typical visit. 1000 burn-in steps at
+  // 0.2 s/step is ~200 s of process time and costs microseconds.
+  function stationaryArHistory(rho, sigmaInnov) {
+    const p = rho.length;
+    const hist = new Array(p).fill(0);
+    for (let t = 0; t < 1000; t++) {
+      let mean = 0;
+      for (let k = 0; k < p; k++) mean += rho[k] * hist[k];
+      const next = mean + sigmaInnov * randn();
+      for (let k = p - 1; k > 0; k--) hist[k] = hist[k - 1];
+      hist[0] = next;
+    }
+    return hist;
+  }
+
   function idmAccel(v, vLead, gap) {
     const { v0, T, a, b, s0, delta } = params;
     const deltaV = v - vLead;
@@ -255,7 +396,7 @@
     return a * (1 - Math.pow(v / v0, delta) - Math.pow(sStar / safeGap, 2));
   }
 
-  const ETA_MAX = 2000; // samples kept per sim (≈100 s at dt=0.05)
+  const ETA_MAX = 4000; // samples kept per sim (≈200 s at dt=0.05)
 
   function stepSim(sim, dt) {
     const L = circumference();
@@ -265,48 +406,61 @@
     for (let i = 0; i < n; i++) {
       const me = sim.cars[i];
       const lead = sim.cars[(i + 1) % n];
-      let gap = lead.s - me.s - params.carLength;
-      if (gap < 0) gap += L;
+      const gap = ringGap(lead.s, me.s, L);
       let acc = idmAccel(me.v, lead.v, gap);
       let eta = 0;
       if (params.noiseScale > 0) {
-        if (sim.mode === "white") eta = whiteNoise();
+        if (sim.mode === "white") eta = whiteNoise(me, dt);
         else if (sim.mode === "ar") eta = arNoise(me, dt);
         else eta = gpNoise(me, sim.simTime);
         // Soft-saturate at ±5 m/s² — see simulation.js for rationale.
         const ETAMAX = 5.0;
-        acc += Math.tanh(eta / ETAMAX) * ETAMAX;
+        eta = Math.tanh(eta / ETAMAX) * ETAMAX;
+        acc += eta;
       }
+      // Record the *applied* residual, so the η panel, its ACF and the metrics
+      // describe the process that actually drives the cars.
       me.lastEta = eta;
       if (me.perturbUntil > 0) { acc = Math.min(acc, -4.0); me.perturbUntil -= dt; }
       accels[i] = acc;
     }
-    let sumV = 0, minV = Infinity;
     for (let i = 0; i < n; i++) {
       const c = sim.cars[i];
       c.v = Math.max(0, c.v + accels[i] * dt);
       c.s = (c.s + c.v * dt) % L; if (c.s < 0) c.s += L;
-      sumV += c.v; if (c.v < minV) minV = c.v;
     }
-    // overlap clamp
+    // Overlap clamp. Iterating in descending index order propagates a
+    // correction backwards along the platoon: pushing car i back tightens the
+    // gap for car i-1, which is processed next. One extra pass closes the
+    // wrap-around seam. Bail out as soon as a pass finds nothing to fix.
     const minGap = params.s0;
-    for (let i = 0; i < n; i++) {
-      const me = sim.cars[i];
-      const lead = sim.cars[(i + 1) % n];
-      let gap = lead.s - me.s - params.carLength;
-      if (gap < 0) gap += L;
-      if (gap < minGap) {
+    for (let pass = 0; pass < 4; pass++) {
+      let fixed = 0;
+      for (let i = n - 1; i >= 0; i--) {
+        const me = sim.cars[i];
+        const lead = sim.cars[(i + 1) % n];
+        if (ringGap(lead.s, me.s, L) >= minGap) continue;
         let target = lead.s - params.carLength - minGap;
-        if (target < 0) target += L;
+        target = ((target % L) + L) % L;
         me.s = target;
         if (me.v > lead.v) me.v = lead.v;
+        fixed++;
       }
+      if (!fixed) break;
+    }
+    // Collect ring statistics *after* the clamp so the reported speeds match
+    // the vehicles actually drawn.
+    let sumV = 0, minV = Infinity;
+    for (let i = 0; i < n; i++) {
+      const v = sim.cars[i].v;
+      sumV += v;
+      if (v < minV) minV = v;
     }
     sim.simTime += dt;
     // Record stats
     const avgV = sumV / n;
     sim.avgSpeedHist.push(avgV);
-    if (sim.avgSpeedHist.length > 4000) sim.avgSpeedHist.shift();
+    if (sim.avgSpeedHist.length > 8000) sim.avgSpeedHist.splice(0, sim.avgSpeedHist.length - 4000);
     sim.totalFrames++;
     if (minV < 3.0) sim.jamFrames++;
     // FD point — use full ring (L meters), 4 sub-arcs for scatter diversity
@@ -328,7 +482,7 @@
     for (const c of sim.cars) {
       if (c.tagged) {
         sim.etaHist.push(c.lastEta);
-        if (sim.etaHist.length > ETA_MAX) sim.etaHist.shift();
+        if (sim.etaHist.length > ETA_MAX * 2) sim.etaHist.splice(0, sim.etaHist.length - ETA_MAX);
         break;
       }
     }
@@ -405,10 +559,14 @@
     const W = cEta._w || cEta.width, H = cEta._h || cEta.height;
     drawChartFrame(xEta, W, H, "time (s)", "η(t) (m/s²)");
     const window = 500;
-    // y-range: symmetric around 0, large enough to fit the biggest of the three
-    // calibrated sigmas at the current scale multiplier.
-    const refSigma = Math.max(SIGMA_WHITE, SIGMA_GP, 1.0) * params.noiseScale;
-    const yr = Math.max(0.1, 3 * refSigma);
+    // y-range: symmetric around 0, sized from the largest *marginal* standard
+    // deviation of the three processes at the current scale. (Using a hard-coded
+    // floor of 1.0 here used to dominate the calibrated σ values of 0.24/0.20,
+    // so the traces occupied only a few percent of the panel.)
+    const refSigma = Math.max(
+      marginalSigma("white"), marginalSigma("gp"), marginalSigma("ar")
+    );
+    const yr = Math.max(0.05, 3 * refSigma);
     const y0 = H / 2;
     const yScale = (H / 2 - 20) / yr;
     // zero line
@@ -439,6 +597,10 @@
   }
 
   // Empirical autocorrelation of a 1-D series up to maxLag.
+  // Both the lag-k covariance and the variance are divided by n (the "biased"
+  // estimator). Dividing the numerator by n-k while the denominator uses n, as
+  // this function used to, inflates every lag by n/(n-k) and can return values
+  // outside [-1, 1] at large lags.
   function acf(arr, maxLag) {
     const n = arr.length;
     if (n < maxLag + 2) return null;
@@ -454,7 +616,7 @@
     for (let k = 1; k <= maxLag; k++) {
       let s = 0;
       for (let i = 0; i < n - k; i++) s += (arr[i] - mean) * (arr[i + k] - mean);
-      r[k] = s / (n - k) / c0;
+      r[k] = (s / n) / c0;
     }
     return { r, n, std: Math.sqrt(c0) };
   }
@@ -462,23 +624,25 @@
   function drawAcf() {
     const W = cAcf._w || cAcf.width, H = cAcf._h || cAcf.height;
     drawChartFrame(xAcf, W, H, "lag τ (s)", "ACF(τ)");
-    const maxLagSec = 6.0;
-    const maxLag = Math.round(maxLagSec / params.dtStep);
+    // 12 s window: the DR-IDM residual is positively correlated over roughly
+    // 0–5 s and *negatively* correlated over 5–10 s, which is the paper's
+    // central empirical claim. A 6 s window with a −0.3 floor cut that off.
+    const axisMaxSec = 12.0;
+    const maxLag = Math.round(axisMaxSec / params.dtStep);
     const padL = 46, padR = 12, padT = 14, padB = 22;
     const plotW = W - padL - padR, plotH = H - padT - padB;
-    // y axis from -0.3 to 1.0
-    const yMin = -0.3, yMax = 1.0;
+    const yMin = -0.6, yMax = 1.0;
     const yMap = (y) => padT + (1 - (y - yMin) / (yMax - yMin)) * plotH;
-    const xMap = (tau) => padL + (tau / maxLagSec) * plotW;
+    const xMap = (tau) => padL + (tau / axisMaxSec) * plotW;
     // gridlines
     xAcf.strokeStyle = "#273244"; xAcf.lineWidth = 1;
-    for (const yv of [0, 0.5, 1.0]) {
+    for (const yv of [-0.5, 0, 0.5, 1.0]) {
       xAcf.beginPath(); xAcf.moveTo(padL, yMap(yv)); xAcf.lineTo(W - padR, yMap(yv)); xAcf.stroke();
       xAcf.fillStyle = "#7b8aa2"; xAcf.font = "10px system-ui,sans-serif"; xAcf.textAlign = "right";
       xAcf.fillText(yv.toFixed(1), padL - 4, yMap(yv) + 3);
     }
     xAcf.fillStyle = "#7b8aa2"; xAcf.textAlign = "center";
-    for (const tv of [0, 1, 2, 3, 4, 5, 6]) {
+    for (const tv of [0, 2, 4, 6, 8, 10, 12]) {
       xAcf.fillText(tv.toString(), xMap(tv), H - 8);
     }
     // 95% confidence band for white noise (shortest available N)
@@ -492,16 +656,20 @@
       xAcf.fillStyle = "rgba(123,138,162,0.15)";
       xAcf.fillRect(padL, yMap(ci), plotW, yMap(-ci) - yMap(ci));
     }
-    // Plot ACF for each mode
+    // Plot ACF for each mode. The plotted lag range grows with the available
+    // sample size: estimates at lags approaching n are dominated by noise, so
+    // we cap the drawn lag at n/4 and let the curve extend as data accumulates.
     for (const m of MODES) {
       const sim = sims.find((s) => s.mode === m.id);
-      const res = acf(sim.etaHist, maxLag);
+      const kMax = Math.min(maxLag, Math.floor(sim.etaHist.length / 4));
+      if (kMax < 2) continue;
+      const res = acf(sim.etaHist, kMax);
       if (!res) continue;
       xAcf.strokeStyle = m.color; xAcf.lineWidth = 1.6;
       xAcf.beginPath();
-      for (let k = 0; k <= maxLag; k++) {
+      for (let k = 0; k <= kMax; k++) {
         const x = xMap(k * params.dtStep);
-        const y = yMap(res.r[k]);
+        const y = yMap(Math.max(yMin, Math.min(yMax, res.r[k])));
         if (k === 0) xAcf.moveTo(x, y); else xAcf.lineTo(x, y);
       }
       xAcf.stroke();
@@ -683,6 +851,23 @@
 
   document.getElementById("cmpN").addEventListener("change", resetAll);
   document.getElementById("cmpRadius").addEventListener("change", resetAll);
+
+  // Keep the vehicle-count slider inside the physically feasible range:
+  // no more than L / (carLength + s0) vehicles fit on a single-lane ring.
+  const cmpNEl = document.getElementById("cmpN");
+  const cmpNLbl = document.getElementById("cmpNVal");
+  function syncFeasibleCars() {
+    const nMax = maxFeasibleCars();
+    cmpNEl.max = String(nMax);
+    if (params.numCars > nMax) {
+      params.numCars = nMax;
+      cmpNEl.value = String(nMax);
+      if (cmpNLbl) cmpNLbl.textContent = String(nMax);
+      resetAll();
+    }
+  }
+  document.getElementById("cmpRadius").addEventListener("input", syncFeasibleCars);
+  syncFeasibleCars();
   document.getElementById("cmpEll").addEventListener("change", () => {
     resampleAllGP();
   });
@@ -721,9 +906,14 @@
     e.target.textContent = paused ? "Resume" : "Pause";
   });
   document.getElementById("cmpPerturb").addEventListener("click", () => {
+    // One shared vehicle index across all three rings — the whole point of the
+    // page is that the rings differ only in their noise process, so the
+    // disturbance must be applied at the same place in each.
+    const nCars = sims[0] ? sims[0].cars.length : 0;
+    if (!nCars) return;
+    const idx = Math.floor(rand() * nCars);
     for (const sim of sims) {
-      const idx = Math.floor(rand() * sim.cars.length);
-      sim.cars[idx].perturbUntil = 2.0;
+      if (sim.cars[idx]) sim.cars[idx].perturbUntil = 2.0;
     }
   });
 
@@ -788,19 +978,29 @@
   // ================================================================
   let lastTime = performance.now();
   let metricsAccum = 0;
+  let physAccum = 0;   // unconsumed simulation time, carried across frames
   function tick(now) {
     let dt = (now - lastTime) / 1000;
     lastTime = now;
     dt = Math.min(dt, 0.1) * params.speedMul;
 
     if (!paused) {
-      let remaining = dt;
+      // Fixed simulation clock: advance only in whole params.dtStep steps and
+      // carry the remainder to the next frame. Executing a frame-sized partial
+      // step (as this loop used to) makes the physics, the η sampling interval
+      // and every time-based metric depend on the monitor refresh rate and the
+      // playback multiplier.
+      physAccum += dt;
       const sub = params.dtStep;
-      while (remaining > 1e-6) {
-        const step = Math.min(sub, remaining);
-        for (const sim of sims) stepSim(sim, step);
-        remaining -= step;
+      let work = 0;
+      while (physAccum >= sub && work < 200) {
+        for (const sim of sims) stepSim(sim, sub);
+        physAccum -= sub;
+        work++;
       }
+      // If we hit the work cap the tab cannot keep up; drop the backlog rather
+      // than accumulate an unbounded debt.
+      if (work >= 200) physAccum = 0;
     }
     for (const m of MODES) drawRing(m.id);
     drawEta();

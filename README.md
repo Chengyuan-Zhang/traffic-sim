@@ -98,7 +98,7 @@ Everything is adjustable from the sidebar while the simulation is running.
 | Control | Range | Meaning |
 | --- | --- | --- |
 | Sim speed | 0.25× – 10× | Wall-clock multiplier. |
-| Integration step $\Delta t$ (s) | 0.02 – 2.0 | Euler time-step. **White** noise is re-sampled every $\Delta t$, so its effective strength scales with $\Delta t$; the AR(p) process updates on the paper's fixed 0.2 s grid and the GP is evaluated in continuous time, so both are $\Delta t$-invariant. |
+| Integration step $\Delta t$ (s) | 0.02 – 2.0 | Euler time-step. All three noise processes are $\Delta t$-invariant: white noise and the AR(p) innovations are held on the papers' fixed 0.2 s (5 fps) grid, and the GP is evaluated in continuous time. |
 
 **Measuring region (density / flow / FD)**
 
@@ -112,7 +112,7 @@ Everything is adjustable from the sidebar while the simulation is running.
 | Control | Range | Meaning |
 | --- | --- | --- |
 | Noise model | GP / AR(p) / White | Switches between MA-IDM, dynamic-regression IDM, and B-IDM. |
-| $\sigma$ — noise scale (m/s²) | 0 – 1.0 | Noise scale. **Its meaning differs by mode:** for GP and White it is the marginal std of $\eta$; for AR(p) it is the *innovation* std, and the resulting process has a marginal std $6.8\times$ to $10.3\times$ larger (Yule–Walker, $p=1\ldots7$). The two are not comparable at the same slider value. |
+| $\sigma$ — noise scale (m/s²) | 0 – 1.0 | **Marginal** std of the acceleration residual $\eta$. It means the same thing in all three modes: for AR(p) the innovation is divided by the Yule–Walker factor (6.8× at $p=1$ up to 10.3× at $p=7$) so that the resulting process has this marginal std, making the three models directly comparable. |
 | Kernel (GP only) | RBF, Matérn 5/2, 3/2, 1/2 | Shape of the GP covariance. |
 | $\ell$ — lengthscale (s) (GP only) | 0.1 – 5.0 | Temporal correlation length. |
 | AR order $p$ (AR only) | 1 – 7 | Uses the paper's posterior-mean $\rho$ vectors (Table 1 also reports $p=8$). |
@@ -168,23 +168,27 @@ comparison table.
 This is a research-*inspired* teaching demo, not a reproduction of either
 paper. The things most worth knowing before drawing conclusions from it:
 
-- **The σ slider is not on a common footing across modes.** For GP and White it
-  is a marginal std; for AR(p) it is an innovation std, whose stationary
-  marginal is 6.8–10.3× larger. Comparing modes at the same slider value
-  compares very different noise amplitudes.
-- **White noise is not Δt-invariant.** Its effective strength scales with
-  the integration step; GP and AR(p) are unaffected by it.
 - Acceleration noise is passed through a `5·tanh(η/5)` soft saturation before
-  it is applied, which is not part of any of the displayed equations.
+  it is applied, which is not part of any of the displayed equations. At the
+  default σ it is inert; at large σ it noticeably compresses the tails.
 - Integration is semi-implicit Euler; both papers use the ballistic update
   $x(t+\Delta t)=x+v\Delta t+\tfrac12 a\Delta t^2$.
-- Cars are initialised at $0.8\,v_0$, well above the IDM equilibrium speed at
-  the default density, so every run opens with a transient.
+- A hard overlap clamp keeps the bumper-to-bumper gap at or above $s_0$. It is
+  a safety net, not physics — at large σ or large $\Delta t$ it can intervene
+  often enough to dominate the dynamics.
+- The GP is drawn with $M=32$ random Fourier features, which reproduce the
+  target covariance in expectation; a single realisation deviates from it and
+  is only approximately Gaussian. The papers use conditional Gaussian sampling.
 - Flow is computed as density × space-mean speed on the measuring arc, not from
-  detector crossings or Edie's generalised definitions.
+  detector crossings or Edie's generalised definitions. The four sub-bin points
+  in the fundamental diagram are a spatial cross-section and are deliberately
+  drawn unconnected; only the whole-arc series is a time trajectory.
 - All drivers share one parameter vector. Both papers' ring experiments instead
   draw *heterogeneous* per-driver parameters from the joint posterior, which is
   one of their main contributions.
+- Matérn 3/2 and 1/2 kernels, and AR orders above the paper's recommended
+  $p\approx4$–$6$, are exposed for exploration; the papers calibrate the
+  squared-exponential kernel and mention Matérn 5/2 only.
 
 ## Files
 
