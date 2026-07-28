@@ -48,8 +48,11 @@
       <strong style="color:#74b9ff"><span class="mk-tri" aria-hidden="true"></span> AR(p) (DR-IDM)</strong>,
       <strong style="color:#55efc4"><span class="mk-circ" aria-hidden="true"></span> Gaussian process (MA-IDM)</strong>.
       The autocorrelation of <code>η(t)</code>, the fundamental diagram, and summary
-      metrics reveal the qualitative differences — persistent waves and FD hysteresis
-      under correlated noise, fine jitter under white noise.
+      metrics show how the temporal structure of the residual differs — slowly
+      decaying memory under AR(p) and GP noise, no correlation at all under white
+      noise. Each ring runs at its <em>own</em> paper-calibrated noise scale, so the
+      three do not share a common marginal variance; read the comparison as
+      "each model as calibrated", not as a controlled equal-variance experiment.
     </p>
   </header>
 
@@ -67,8 +70,8 @@
       <input type="range" id="cmpScale" min="0" max="8" value="1.0" step="0.5" />
     </div>
     <div class="control">
-      <label for="cmpEll">ℓ — GP lengthscale (s): <span id="cmpEllVal">1.6</span></label>
-      <input type="range" id="cmpEll" min="0.1" max="5.0" value="1.6" step="0.1" />
+      <label for="cmpEll">ℓ — GP lengthscale (s): <span id="cmpEllVal">1.44</span></label>
+      <input type="range" id="cmpEll" min="0.1" max="5.0" value="1.44" step="0.01" />
     </div>
     <div class="control">
       <label for="cmpKernel">GP kernel</label>
@@ -102,8 +105,11 @@
       <button id="cmpCopyLink" type="button" title="Copy a URL that reproduces the current parameters">Copy link</button>
     </div>
     <p class="hint">
-      All three rings start from the same initial state. Each mode uses its own
-      <strong>paper-calibrated σ</strong>; the slider multiplies them in lockstep.
+      All three rings start from the same initial state and share one IDM
+      parameter vector. Each mode uses its own <strong>paper-calibrated σ</strong>;
+      the slider multiplies them in lockstep. Note that σ<sub>η</sub> for AR is an
+      <em>innovation</em> scale: the resulting AR residual has a marginal standard
+      deviation of roughly 0.14 m/s², against 0.202 for the GP and 0.240 for white.
     </p>
     <p class="hint kbd-legend" style="grid-column:1/-1;margin-top:2px" aria-label="Keyboard shortcuts">
       <kbd>Space</kbd> pause · <kbd>P</kbd> perturb all · <kbd>R</kbd> reset
@@ -159,6 +165,9 @@
       <p class="chart-cap">
         White noise: spike at τ=0, then within the ±2/√N band (grey dashed, 95% CI under i.i.d. noise).
         AR / GP: slow decay — the <em>temporal correlation</em> that distinguishes them from white noise.
+        Per Zhang, Wang &amp; Sun (2024) the AR residual is positively correlated over roughly the first
+        5 s and turns <em>negative</em> between about 5 and 10 s; the window below shows only the first
+        6 s, so that negative lobe is largely off-scale here.
       </p>
       <canvas id="chartAcf" width="900" height="260" role="img"
               aria-label="Empirical autocorrelation function of eta(t) for each noise model, with the plus or minus two over square-root N white-noise confidence band overlaid."></canvas>
@@ -167,11 +176,13 @@
     <div class="chart-card">
       <h3>Fundamental diagram — flow vs density</h3>
       <p class="chart-cap">
-        Correlated noise widens the scatter and tends to produce hysteresis around
-        the critical density.
+        Each dot is one instantaneous sample of (density, flow) taken on the whole ring,
+        with flow computed as density × space-mean speed. Correlated noise widens the
+        scatter. The dots are not time-ordered, so this panel shows the spread of
+        flow–density states, not a hysteresis trajectory.
       </p>
       <canvas id="chartFdCmp" width="900" height="320" role="img"
-              aria-label="Fundamental diagrams (flow versus density) for the three noise models overlaid, showing how correlated residuals widen the scatter and create hysteresis loops."></canvas>
+              aria-label="Fundamental diagrams (flow versus density) for the three noise models overlaid, showing how correlated residuals widen the spread of flow-density states."></canvas>
     </div>
 
     <div class="chart-card chart-wide">
@@ -193,7 +204,14 @@
           <tr><td>% time with min speed &lt; 3 m/s</td><td id="m-jam-white">–</td><td id="m-jam-ar">–</td><td id="m-jam-gp">–</td></tr>
         </tbody>
       </table>
-      <p class="chart-cap">Metrics accumulate from reset; let the sim run ~60&nbsp;s for stable estimates.</p>
+      <p class="chart-cap">
+        Let the sim run ~60&nbsp;s for stable estimates. The η statistics use a rolling
+        window of the most recent samples, ring-speed statistics a longer one, and the
+        jam percentage accumulates from reset. "Effective correlation time" is the sum of
+        the ACF over its leading run of positive values, stopping at the first value below
+        0.05 and capped at 10&nbsp;s — so it deliberately ignores the negative lobe and is
+        censored rather than a full integrated correlation time.
+      </p>
     </div>
   </section>
 

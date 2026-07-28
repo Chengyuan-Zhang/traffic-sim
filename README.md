@@ -39,9 +39,19 @@ $$
 s^\*(v,\Delta v) \;=\; s_0 + v\,T + \tfrac{v\,\Delta v}{2\sqrt{ab}}.
 $$
 
-Defaults follow Treiber & Kesting (2013), *Traffic Flow Dynamics*, Table 11.1
-(recommended highway values): $v_0=33.3$ m/s, $T=1.5$ s, $s_0=2.0$ m,
-$a=1.2$ m/s², $b=1.5$ m/s², $\delta=4$.
+The simulator ships with a representative highway-style parameter set chosen for
+this demo: $v_0=33$ m/s, $T=1.5$ s, $s_0=2.0$ m, $a=1.2$ m/s², $b=1.5$ m/s²,
+$\delta=4$. These are *not* a verbatim row from any published table. For
+reference, two commonly cited sets differ from it and from each other:
+
+| Source | $v_0$ | $s_0$ | $T$ | $a$ | $b$ | $\delta$ |
+| --- | --- | --- | --- | --- | --- | --- |
+| Treiber & Kesting (2013), *Traffic Flow Dynamics*, **Table 11.2** (IDM, highway) | 120 km/h | 2 m | 1.0 s | 1.0 m/s² | 1.5 m/s² | 4 |
+| $\theta_\text{rec}$ used as the prior in both calibration papers | 33.3 m/s | 2.0 m | 1.6 s | 1.5 m/s² | 1.67 m/s² | 4 |
+
+(Table 11.1 of that book is the simplified Gipps model, not the IDM.) The
+posterior means the two papers actually recover from HighD are lower still —
+e.g. $\theta=[16.92, 3.54, 1.18, 0.55, 2.15]$ for the hierarchical MA-IDM.
 
 ### Stochastic extensions — driver-noise models
 
@@ -50,8 +60,8 @@ so that $\dot v_n = f_\text{IDM} + \eta_n(t)$. Three models are available:
 
 | Mode | Noise model | Reference |
 | --- | --- | --- |
-| **Gaussian process (MA-IDM)** | $\eta_n(t) \sim \mathcal{GP}(0, k(\cdot,\cdot))$ with a stationary kernel (RBF / Matérn-5/2 / 3/2 / 1/2). Lengthscale $\ell$ and noise scale $\sigma$ are exposed as sliders. | Zhang & Sun (2024), *"Bayesian Calibration of the Intelligent Driver Model"*, **IEEE T-ITS** — [arXiv:2210.03571](https://arxiv.org/abs/2210.03571) |
-| **AR(p) — dynamic regression** | Autoregressive noise $\eta_t = \sum_{i=1}^p \rho_i\,\eta_{t-i} + \varepsilon_t$. Coefficients $\rho_i$ for $p=1,\ldots,7$ are the posterior means reported in Table 1 of the paper. | Zhang, Wang & Sun (2024), *"Calibrating Car-Following Models via Bayesian Dynamic Regression"*, **Transportation Research Part C (ISTTT25)** — [arXiv:2307.03340](https://arxiv.org/abs/2307.03340) |
+| **Gaussian process (MA-IDM)** | $\eta_n(t) \sim \mathcal{GP}(0, k(\cdot,\cdot))$ with a stationary kernel. The paper calibrates a squared-exponential (RBF) kernel and notes Matérn-5/2 as an alternative; Matérn-3/2 and 1/2 are extensions added for this demo. Sampled here by a random-Fourier-feature approximation ($M=32$), not the paper's conditional-Gaussian scheme. Lengthscale $\ell$ and noise scale $\sigma$ are exposed as sliders. | Zhang & Sun (2024), *"Bayesian Calibration of the Intelligent Driver Model"*, **IEEE T-ITS** — [arXiv:2210.03571](https://arxiv.org/abs/2210.03571) |
+| **AR(p) — dynamic regression** | Autoregressive noise $\eta_t = \sum_{i=1}^p \rho_i\,\eta_{t-i} + \varepsilon_t$, updated on the paper's 0.2 s (5 fps) grid. Coefficients $\rho_i$ for $p=1,\ldots,7$ are the posterior means reported in Table 1 of the paper, which also lists $p=8$; the paper compares covariance functions up to $p=10$ and recommends $p\approx4$–$6$. | Zhang, Wang & Sun (2024), *"Calibrating Car-Following Models via Bayesian Dynamic Regression"*, **Transportation Research Part C (ISTTT25)** — [arXiv:2307.03340](https://arxiv.org/abs/2307.03340) |
 | **White noise (B-IDM)** | I.i.d. Gaussian $\eta_t\sim\mathcal N(0,\sigma^2)$ — the baseline Bayesian IDM. | Zhang & Sun (2024), same as above |
 
 ### Traffic-flow diagnostics
@@ -88,7 +98,7 @@ Everything is adjustable from the sidebar while the simulation is running.
 | Control | Range | Meaning |
 | --- | --- | --- |
 | Sim speed | 0.25× – 10× | Wall-clock multiplier. |
-| Integration step $\Delta t$ (s) | 0.02 – 2.0 | Euler time-step. Noise is re-sampled every $\Delta t$. |
+| Integration step $\Delta t$ (s) | 0.02 – 2.0 | Euler time-step. **White** noise is re-sampled every $\Delta t$, so its effective strength scales with $\Delta t$; the AR(p) process updates on the paper's fixed 0.2 s grid and the GP is evaluated in continuous time, so both are $\Delta t$-invariant. |
 
 **Measuring region (density / flow / FD)**
 
@@ -102,10 +112,10 @@ Everything is adjustable from the sidebar while the simulation is running.
 | Control | Range | Meaning |
 | --- | --- | --- |
 | Noise model | GP / AR(p) / White | Switches between MA-IDM, dynamic-regression IDM, and B-IDM. |
-| $\sigma$ — noise scale (m/s²) | 0 – 1.0 | Marginal std. of acceleration noise. |
+| $\sigma$ — noise scale (m/s²) | 0 – 1.0 | Noise scale. **Its meaning differs by mode:** for GP and White it is the marginal std of $\eta$; for AR(p) it is the *innovation* std, and the resulting process has a marginal std $6.8\times$ to $10.3\times$ larger (Yule–Walker, $p=1\ldots7$). The two are not comparable at the same slider value. |
 | Kernel (GP only) | RBF, Matérn 5/2, 3/2, 1/2 | Shape of the GP covariance. |
 | $\ell$ — lengthscale (s) (GP only) | 0.1 – 5.0 | Temporal correlation length. |
-| AR order $p$ (AR only) | 1 – 7 | Uses the paper's posterior-mean $\rho$ vectors. |
+| AR order $p$ (AR only) | 1 – 7 | Uses the paper's posterior-mean $\rho$ vectors (Table 1 also reports $p=8$). |
 
 **Actions**
 
@@ -134,17 +144,47 @@ macroscopic jam waves. It plots:
 
 Each model uses its own posterior-mean σ from Table 1 of the respective
 paper; the *Noise scale* slider multiplies all three by the same factor, so
-`1×` reproduces paper fidelity.
+`1×` runs each model at **its own paper-calibrated noise scale**. That is not
+the same as reproducing the papers: the ring geometry, the IDM parameters and
+the posterior heterogeneity all differ from the papers' experiments (which use
+$R=128$ m, an initial speed of 11.6 m/s, 32–37 vehicles, $\Delta t=0.2$ s and
+per-driver parameters drawn from the joint posterior). Note also that σ for AR
+is an *innovation* scale, so the three rings do not share a common marginal
+variance — read the page as "each model as calibrated", not as a controlled
+equal-variance experiment.
 
 ## Motivation & models page
 
 [`models.html`](models.html) is a long-form explainer of the science behind
-the simulator: why deterministic IDM misses the interesting jam dynamics,
-and how MA-IDM (Gaussian-process driver noise) and DR-IDM (AR(p) driver
-noise) differ in their assumptions, parameters, and computational cost.
+the simulator: why the calibration residual of a deterministic IDM is not
+white noise, and how MA-IDM (Gaussian-process driver noise) and DR-IDM (AR(p)
+driver noise) differ in their assumptions and parameters.
 Includes a hero figure with three sample residual traces, the IDM equations
 typeset with MathJax, per-paper "at a glance" cards, and a side-by-side
 comparison table.
+
+## Known limitations
+
+This is a research-*inspired* teaching demo, not a reproduction of either
+paper. The things most worth knowing before drawing conclusions from it:
+
+- **The σ slider is not on a common footing across modes.** For GP and White it
+  is a marginal std; for AR(p) it is an innovation std, whose stationary
+  marginal is 6.8–10.3× larger. Comparing modes at the same slider value
+  compares very different noise amplitudes.
+- **White noise is not Δt-invariant.** Its effective strength scales with
+  the integration step; GP and AR(p) are unaffected by it.
+- Acceleration noise is passed through a `5·tanh(η/5)` soft saturation before
+  it is applied, which is not part of any of the displayed equations.
+- Integration is semi-implicit Euler; both papers use the ballistic update
+  $x(t+\Delta t)=x+v\Delta t+\tfrac12 a\Delta t^2$.
+- Cars are initialised at $0.8\,v_0$, well above the IDM equilibrium speed at
+  the default density, so every run opens with a transient.
+- Flow is computed as density × space-mean speed on the measuring arc, not from
+  detector crossings or Edie's generalised definitions.
+- All drivers share one parameter vector. Both papers' ring experiments instead
+  draw *heterogeneous* per-driver parameters from the joint posterior, which is
+  one of their main contributions.
 
 ## Files
 
@@ -181,13 +221,14 @@ If this simulator is useful in your work, please cite the two underlying
 papers:
 
 > Zhang, C., & Sun, L. (2024). **Bayesian Calibration of the Intelligent Driver
-> Model.** *IEEE Transactions on Intelligent Transportation Systems.*
+> Model.** *IEEE Transactions on Intelligent Transportation Systems*, 25(8),
+> 9308–9320.
 > doi:[10.1109/TITS.2024.3354102](https://doi.org/10.1109/TITS.2024.3354102).
 > [arXiv:2210.03571](https://arxiv.org/abs/2210.03571)
 
 > Zhang, C., Wang, W., & Sun, L. (2024). **Calibrating Car-Following Models via
 > Bayesian Dynamic Regression.** *Transportation Research Part C: Emerging
-> Technologies*, 104719 (ISTTT25).
+> Technologies*, 168, 104719 (ISTTT25).
 > doi:[10.1016/j.trc.2024.104719](https://doi.org/10.1016/j.trc.2024.104719).
 > [arXiv:2307.03340](https://arxiv.org/abs/2307.03340)
 
@@ -198,6 +239,9 @@ BibTeX:
   title   = {Bayesian Calibration of the Intelligent Driver Model},
   author  = {Zhang, Chengyuan and Sun, Lijun},
   journal = {IEEE Transactions on Intelligent Transportation Systems},
+  volume  = {25},
+  number  = {8},
+  pages   = {9308--9320},
   year    = {2024},
   doi     = {10.1109/TITS.2024.3354102}
 }
@@ -206,6 +250,8 @@ BibTeX:
   title   = {Calibrating Car-Following Models via Bayesian Dynamic Regression},
   author  = {Zhang, Chengyuan and Wang, Wenshuo and Sun, Lijun},
   journal = {Transportation Research Part C: Emerging Technologies},
+  volume  = {168},
+  pages   = {104719},
   year    = {2024},
   doi     = {10.1016/j.trc.2024.104719}
 }

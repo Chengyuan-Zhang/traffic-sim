@@ -54,8 +54,11 @@
 
   const params = {
     numCars: 30,
-    // IDM defaults from Treiber & Kesting (2013), Traffic Flow Dynamics,
-    // Table 11.1 — recommended highway-traffic values.
+    // Representative highway-style IDM values chosen for this demo. They are NOT
+    // a verbatim row from Treiber & Kesting (2013) — that book's IDM table is
+    // Table 11.2 (highway: v0 = 120 km/h, T = 1.0 s, s0 = 2 m, a = 1.0, b = 1.5,
+    // delta = 4); Table 11.1 is the simplified Gipps model. The prior used in
+    // both calibration papers is theta_rec = [33.3, 2.0, 1.6, 1.5, 1.67].
     v0: 33,        // desired speed (m/s)   [~120 km/h]
     T: 1.5,        // safe time headway (s)
     a: 1.2,        // max acceleration (m/s^2)
@@ -68,7 +71,7 @@
     dtStep: 0.05,  // integration step size (s)
     // GP driver noise (arXiv:2210.03571) with choice of kernel
     gpSigma: 0.20,      // output scale (m/s^2)  [MA-IDM: σ_k = 0.202]
-    gpEll: 1.4,         // lengthscale (seconds) [MA-IDM: ℓ = 1.44 s]
+    gpEll: 1.44,        // lengthscale (seconds) [MA-IDM: ℓ = 1.435 s, Table I]
     gpKernel: "rbf",    // "rbf" | "matern52" | "matern32" | "matern12"
     noiseMode: "gp",    // "gp" | "ar" | "white"
     arOrder: 2,         // AR(p) order; uses paper-calibrated ρ for this order
@@ -117,9 +120,16 @@
   }
 
   // AR coefficients calibrated on HighD (5 fps) in arXiv:2307.03340, Table 1.
-  // Keys = AR order p; values = [rho_1, rho_2, ..., rho_p].
-  // When noise mode is "ar", sigma controls the innovation std (the paper's
-  // calibrated sigma_eta ~ 0.019 m/s^2 is too small for a visible toy sim).
+  // Keys = AR order p; values = [rho_1, rho_2, ..., rho_p]. Table 1 also reports
+  // p = 8; the paper compares covariance functions up to p = 10.
+  //
+  // CAVEAT: when noise mode is "ar", `sigma` is the INNOVATION std, whereas for
+  // "gp" and "white" it is the MARGINAL std. Solving Yule-Walker for these rho
+  // gives a stationary std of 6.76x (p=1), 7.17x (p=2), 8.50x, 8.79x, 8.91x,
+  // 9.42x and 10.27x (p=7) the innovation std, so the same slider value produces
+  // a much noisier process in AR mode. The paper's own sigma_eta (0.019 -> 0.014)
+  // is NOT "too small to see": it implies a marginal std of about 0.14 m/s^2,
+  // the same order as MA-IDM's sigma_k = 0.202 and B-IDM's sigma_eps = 0.240.
   const AR_COEFFS = {
     1: [0.989],
     2: [1.234, -0.247],
@@ -1078,7 +1088,7 @@
   bindRange("regionCenter", "regionCenter", (v) => String(v | 0) + "°");
   bindRange("regionSpan", "regionSpan", (v) => String(v | 0) + "°");
   bindRange("gpSigma", "gpSigma", (v) => v.toFixed(2));
-  bindRange("gpEll", "gpEll", (v) => v.toFixed(1));
+  bindRange("gpEll", "gpEll", (v) => v.toFixed(2));
 
   // AR order dropdown (not a range slider)
   const arOrderEl = document.getElementById("arOrder");
@@ -1113,12 +1123,22 @@
   const CITE = {
     gp: 'Gaussian-process driver noise with a stationary kernel, from '
       + '<a href="https://arxiv.org/abs/2210.03571" target="_blank" rel="noopener">Zhang &amp; Sun (2024) — MA-IDM</a>. '
-      + 'Realized here via M = 32 random Fourier features per car.',
+      + 'Realized here via M = 32 random Fourier features per car, which matches the '
+      + 'target covariance in expectation rather than exactly. '
+      + '<b>σ is the marginal std</b> σ<sub>k</sub> of η(t); the paper\'s hierarchical '
+      + 'posterior mean is σ<sub>k</sub> = 0.202 m/s², ℓ = 1.44 s.',
     ar: 'AR(p) noise with posterior-mean coefficients ρ from Table 1 of '
       + '<a href="https://arxiv.org/abs/2307.03340" target="_blank" rel="noopener">Zhang, Wang &amp; Sun (2024) — dynamic-regression IDM</a>, '
-      + 'calibrated on HighD at 5 fps. σ here is the innovation std σ<sub>η</sub>.',
+      + 'calibrated on HighD at 5 fps. <b>σ here is the innovation std σ<sub>η</sub>, not the '
+      + 'marginal std</b> — solving Yule–Walker, the resulting process has a marginal std '
+      + '6.8× (p = 1) to 10.3× (p = 7) larger, so this mode is far noisier than GP or White '
+      + 'at the same slider value. The paper\'s own σ<sub>η</sub> is 0.019 → 0.014 m/s², '
+      + 'giving a marginal std of about 0.14 m/s².',
     white: 'I.i.d. Gaussian driver noise — the Bayesian IDM (B-IDM) baseline '
-      + 'used for comparison in both Zhang &amp; Sun (2024) and Zhang, Wang &amp; Sun (2024).',
+      + 'used for comparison in both Zhang &amp; Sun (2024) and Zhang, Wang &amp; Sun (2024). '
+      + '<b>σ is the marginal std</b> (paper posterior mean σ<sub>ε</sub> = 0.240 m/s²). '
+      + 'Note this mode re-samples every Δt, so its effective strength scales with the '
+      + 'integration step.',
   };
   if (params.noiseMode) noiseModeEl.value = params.noiseMode;
   function applyNoiseMode() {

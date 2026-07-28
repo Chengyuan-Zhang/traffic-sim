@@ -83,15 +83,16 @@
         <p>
           After fitting IDM to a real driver, the acceleration residual
           \(\eta_n(t)\) is <em>not</em> white — its memory effect extends
-          over the past several seconds of driving. Feeding the right kind
-          of correlated noise back into a simulator is what turns a clean
-          deterministic trace into the persistent stop-and-go waves you see
-          in real highway data.
+          over the past several seconds of driving. A deterministic ring road
+          already goes unstable and forms stop-and-go waves at high enough
+          density; what the <em>colour</em> of the residual changes is how
+          those waves are seeded, how persistent they are, and how much
+          spread the resulting flow–density states show.
         </p>
         <p>
           This page explains the two Bayesian models the simulator is built
-          on, and why they produce qualitatively different jam dynamics from
-          the white-noise baseline.
+          on, and why the temporal structure of \(\eta_n(t)\) matters for
+          simulation rather than only for goodness of fit.
         </p>
         <div class="legend-row">
           <span><span class="legend-swatch" style="background:var(--c-white)" aria-hidden="true"></span><b>White</b> — B-IDM (i.i.d.)</span>
@@ -182,11 +183,13 @@
       <div class="mdl-tile">
         <h3><span class="icon">②</span> Noise colour changes the macroscopic flow</h3>
         <p>
-          White-noise residuals produce high-frequency jitter with little
-          effect on flow. <em>Correlated</em> residuals with the same marginal
-          variance produce persistent stop-and-go waves and measurable
-          fundamental-diagram hysteresis. The
-          <a href="compare.html">compare page</a> shows this directly.
+          White-noise residuals produce high-frequency jitter that largely
+          averages out. <em>Correlated</em> residuals push the same total
+          variance into low frequencies, which is the part a car-following
+          chain amplifies. The <a href="compare.html">compare page</a> lets you
+          vary the temporal structure and watch the effect — note that it runs
+          each model at its own calibrated noise scale, so the three rings do
+          <em>not</em> share a common marginal variance.
         </p>
       </div>
     </div>
@@ -231,8 +234,13 @@
     </div>
 
     <p>
-      and the <em>only</em> difference between the three models is the
-      stochastic process we assume for \(\eta_n(t)\).
+      In this simulator the <em>only</em> difference between the three modes is
+      the stochastic process assumed for \(\eta_n(t)\): every ring shares one
+      common IDM parameter vector. That is a deliberate ablation, not a
+      reproduction of the papers — there, each model is calibrated separately
+      and the ring experiments draw <em>heterogeneous</em> per-driver
+      parameters from the joint posterior, so \(\theta\) differs between models
+      as well.
     </p>
 
     <!-- ============================================================ -->
@@ -284,21 +292,30 @@
           </div>
 
           <p>
-            The simulator exposes four kernels (RBF and Matérn&nbsp;5/2, 3/2,
+            The paper calibrates a squared-exponential (RBF) kernel and notes
+            that other kernels such as Matérn&nbsp;5/2 could be used instead.
+            This simulator exposes four kernels (RBF and Matérn&nbsp;5/2, 3/2,
             1/2), all with the same marginal variance \(\sigma_k^{2}\) and
-            lengthscale \(\ell\). Smoother kernels (RBF) produce smoother
-            acceleration noise; rougher kernels (Matérn&nbsp;1/2, the
-            Ornstein–Uhlenbeck limit) produce visibly jittery traces with the
-            same long-run variance.
+            lengthscale \(\ell\); <em>Matérn&nbsp;3/2 and 1/2 are extensions
+            added for this demo, not options calibrated in the paper.</em>
+            Smoother kernels (RBF) produce smoother acceleration noise; rougher
+            kernels (Matérn&nbsp;1/2, the Ornstein–Uhlenbeck limit) produce
+            visibly jittery traces with the same long-run variance.
           </p>
 
           <p>
-            <strong>Simulation.</strong> Exact GP sampling is \(O(N^3)\) in the
-            trajectory length, so we use a random-Fourier-feature approximation
+            <strong>Simulation.</strong> The paper draws its GP residuals by
+            conditional Gaussian sampling with a pre-factorised covariance
+            matrix, whose factorisation cost is \(O(N^3)\) in the trajectory
+            length. To keep the browser interactive this simulator instead uses
+            a random-Fourier-feature (RFF) approximation
             \(\eta(t)\approx \sigma\sqrt{2/M}\sum_{m=1}^{M}\cos(\omega_m t + b_m)\)
-            with \(\omega_m\) drawn from the kernel's spectral density — this
-            brings sampling down to \(O(M)\) per step while preserving the
-            target covariance.
+            with \(\omega_m\) drawn from the kernel's spectral density, which
+            costs \(O(M)\) per step. With \(M=32\) the construction reproduces
+            the target covariance <em>in expectation</em>; any single
+            realisation deviates from it, and the marginal distribution is only
+            approximately Gaussian. It is an approximation to the paper's model,
+            not the paper's sampling scheme.
           </p>
         </div>
       </div>
@@ -356,25 +373,34 @@
             with the IDM parameters in a fully Bayesian framework. The paper
             compares orders via short-horizon RMSE / CRPS on HighD and
             recommends \(p\approx 4\!-\!6\) (using AR(5) for its
-            demonstrations); the simulator exposes \(p=1,\ldots,7\) and uses
-            the posterior-mean \(\boldsymbol\rho\) reported in Table&nbsp;1 of
-            the paper (HighD, 5&nbsp;Hz sampling).
+            demonstrations): too few lags underfit, while too many overfit and
+            cost more to fit. Table&nbsp;1 of the paper reports posterior-mean
+            \(\boldsymbol\rho\) for \(p=1,\ldots,8\) and Figure&nbsp;6 compares
+            covariance functions up to \(p=10\); this simulator exposes
+            \(p=1,\ldots,7\) of those (HighD, 5&nbsp;Hz sampling).
           </p>
 
           <p>
             <strong>Why AR?</strong> AR(p) is the discrete-time analogue of a
             low-order linear SDE. It is cheap to simulate (\(O(p)\) per step,
-            no matrix factorisations), exactly stationary for any admissible
-            \(\boldsymbol\rho\), and the coefficients themselves are
-            interpretable — \(\rho_1\) is the lag-1 autocorrelation, and the
-            dominant root of the characteristic polynomial sets the memory
-            timescale.
+            no matrix factorisations), and exactly stationary for every
+            \(\boldsymbol\rho\) in Table&nbsp;1 — all eight coefficient vectors
+            have their characteristic roots outside the unit circle. The
+            dominant root sets the memory timescale. Note that \(\rho_1\) is
+            <em>not</em> the lag-1 autocorrelation unless \(p=1\): for
+            \(p=2\) the paper's \(\rho_1=1.234\) already exceeds 1. The implied
+            lag-1 autocorrelation follows from the Yule–Walker equations and is
+            remarkably stable across orders, \(\approx 0.99\) at the 0.2&nbsp;s
+            sampling step.
           </p>
 
           <p>
-            On the benchmark data, AR(p) matches the GP's predictive
-            log-likelihood while being roughly an order of magnitude faster to
-            fit — attractive for real-time or online calibration.
+            On HighD, the paper evaluates 5&nbsp;s simulations by RMSE and CRPS
+            (Table&nbsp;2) and reports that the dynamic IDM outperforms both the
+            Bayesian IDM and MA-IDM, especially for \(p\ge 4\). Figure&nbsp;9
+            adds the horizon dependence: MA-IDM performs well within about
+            4&nbsp;s, beyond which its simulations become dominated by the
+            noise term and its accuracy approaches the Bayesian IDM's.
           </p>
         </div>
       </div>
@@ -471,10 +497,10 @@
             <td data-label="MA-IDM">\(O(M)\) (random Fourier features)</td>
           </tr>
           <tr>
-            <th scope="row">Macro signature</th>
-            <td data-label="B-IDM">Fine jitter, no persistent waves</td>
-            <td data-label="DR-IDM">Persistent waves, mild FD hysteresis</td>
-            <td data-label="MA-IDM">Persistent waves, clearest FD hysteresis</td>
+            <th scope="row">Residual autocorrelation</th>
+            <td data-label="B-IDM">Zero at every non-zero lag</td>
+            <td data-label="DR-IDM">Positive to ~5&nbsp;s, negative over 5–10&nbsp;s</td>
+            <td data-label="MA-IDM">Positive, decaying over ~3\(\ell\approx5\)&nbsp;s</td>
           </tr>
           <tr>
             <th scope="row">Reference</th>

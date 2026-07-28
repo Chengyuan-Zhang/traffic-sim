@@ -50,10 +50,13 @@
     dtStep: 0.05,
     speedMul: 5.0,
     // Dimensionless multiplier applied to each model's paper-calibrated sigma.
-    // noiseScale = 1.0 reproduces the posterior-mean values of Table 1 in
-    // arXiv:2307.03340 (AR & white) and arXiv:2210.03571 (GP).
+    // noiseScale = 1.0 runs each model at the posterior-mean sigma of Table 1 in
+    // arXiv:2307.03340 (AR & white) and arXiv:2210.03571 (GP). It does NOT
+    // reproduce the papers' ring experiments, which use R = 128 m, an initial
+    // speed of 11.6 m/s, 32-37 vehicles, dt = 0.2 s and heterogeneous per-driver
+    // parameters drawn from the joint posterior.
     noiseScale: 1.0,
-    ell: 1.6,
+    ell: 1.44,
     kernel: "rbf",
     arOrder: 5,
     seed: 0,
@@ -98,7 +101,10 @@
   //  - SIGMA_GP    : MA-IDM kernel output scale σ_k (Zhang & Sun 2024)
   //  - SIGMA_AR[p] : AR(p) innovation std σ_η (Zhang, Wang & Sun 2024, Table 1)
   // Note that SIGMA_AR values are innovation stds — the resulting process has a
-  // larger *marginal* std that depends on ρ. This is exactly the paper's design.
+  // larger *marginal* std that depends on ρ. Solving the Yule–Walker equations
+  // gives a marginal std of ≈0.13–0.14 m/s² across p = 1…7, i.e. the same order
+  // as SIGMA_GP (0.202) and SIGMA_WHITE (0.240) but not equal to them. The three
+  // rings therefore compare "each model as calibrated", not equal variances.
   const SIGMA_WHITE = 0.240;
   const SIGMA_GP    = 0.202;
   const SIGMA_AR    = { 1: 0.019, 2: 0.019, 3: 0.017, 4: 0.016, 5: 0.016, 6: 0.015, 7: 0.014 };
@@ -672,7 +678,7 @@
   bindRange("cmpN", "numCars");
   bindRange("cmpRadius", "radius");
   bindRange("cmpScale", "noiseScale", (v) => v.toFixed(1) + "×");
-  bindRange("cmpEll", "ell", (v) => v.toFixed(1));
+  bindRange("cmpEll", "ell", (v) => v.toFixed(2));
   bindRange("cmpSpeed", "speedMul", (v) => v + "×");
 
   document.getElementById("cmpN").addEventListener("change", resetAll);
