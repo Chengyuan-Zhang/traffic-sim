@@ -26,6 +26,25 @@ python -m http.server 8000
 # then open http://localhost:8000
 ```
 
+## Tests
+
+```bash
+node tests/invariants.js
+```
+
+Zero dependencies and no test framework — just Node. `tests/browser-stub.js`
+fakes enough of the DOM and canvas APIs to boot `simulation.js` and
+`compare.js` under Node, optionally stripping their IIFE wrapper so a test can
+reach the internals, so the assertions run against the code that actually
+ships rather than a re-implementation.
+
+The suite locks down the things that are easy to break silently: the published
+constants from Table 1 of each paper, AR(p) stationarity and marginal scale,
+the ring geometry (no overlaps and no overtaking, including at the extreme
+ends of the sliders), Δt-invariance of the noise, the correlation structure of
+each residual process, equilibrium initialisation, the feasible-packing limit,
+and hostile URL parameters. It takes about ten seconds.
+
 ## What's implemented
 
 ### Deterministic baseline — IDM
@@ -205,6 +224,8 @@ paper. The things most worth knowing before drawing conclusions from it:
 - `compare.js` — lockstep IDM × 3 with per-model paper-calibrated sigmas
 - `models.js` — hero canvas figure for `models.html`
 - `page.js` — small shared page-glue script (Copy-BibTeX, mailto obfuscation)
+- `tests/browser-stub.js` — minimal DOM/canvas stub that boots the modules under Node
+- `tests/invariants.js` — invariant and regression tests (`node tests/invariants.js`)
 - `.nojekyll` — tells GitHub Pages not to process with Jekyll
 
 ## Contact
