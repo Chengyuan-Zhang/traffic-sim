@@ -79,8 +79,8 @@
           <select id="preset"
                   title="Jump to the ring-road setups published in the two calibration papers.">
             <option value="custom" selected>Custom</option>
-            <option value="ma-homog">MA-IDM ring — homogeneous (Fig. 10a)</option>
-            <option value="ma-hetero">MA-IDM ring — heterogeneous (Fig. 10b)</option>
+            <option value="ma-rec">MA-IDM ring — recommended θ (Fig. 10a)</option>
+            <option value="ma-post">MA-IDM ring — calibrated θ (Fig. 10b)</option>
             <option value="dr-dense">Dynamic-IDM ring — dense traffic (Fig. 10c)</option>
           </select>
         </div>
@@ -100,20 +100,6 @@
           <input type="range" id="radius" min="60" max="250" value="120" step="1"
                  title="Radius of the circular track. Larger ring = longer effective road (circumference = 2πr)." />
         </div>
-
-        <div class="control">
-          <label for="hetero">Driver heterogeneity (log-scale sd): <span id="heteroVal">0.00</span></label>
-          <input type="range" id="hetero" min="0" max="0.4" value="0" step="0.01"
-                 title="Per-driver spread of the IDM parameters. 0 = every driver identical." />
-        </div>
-        <p class="hint">
-          Both papers model drivers as ln(θ<sub>d</sub>) ~ N(ln θ, Σ) and draw each
-          vehicle's parameters from that posterior, with the correlation signs their
-          §V-B1 reports. The magnitudes in Σ are not published, so this spread is a
-          control, not a paper value. What it does depends on the regime: at the
-          recommended θ the ring is stable either way, while at the papers' calibrated θ
-          the <em>identical</em> ring is the unstable one and a spread damps its wave.
-        </p>
 
         <div class="control">
           <label for="speedMul">Sim speed: <span id="speedMulVal">1.0×</span></label>

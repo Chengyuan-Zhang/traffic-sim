@@ -240,46 +240,9 @@
       reproduction of the papers — there, each model is calibrated separately
       and the ring experiments draw <em>heterogeneous</em> per-driver
       parameters from the joint posterior, so \(\theta\) differs between models
-      as well.
-    </p>
-
-    <p>
-      That hierarchical structure is one of the papers' main contributions, and
-      the simulator now exposes it. Both model drivers as
-    </p>
-
-    <div class="mdl-eq-banner">
-      \[
-        \ln(\boldsymbol\theta_d) \;\sim\; \mathcal{N}\!\big(\ln(\boldsymbol\theta),\,\boldsymbol\Sigma\big),
-      \]
-    </div>
-
-    <p>
-      log-normal variation whose median is the population parameter. The
-      <a href="index.html">simulator's</a> <em>Driver heterogeneity</em> slider
-      is the log-scale standard deviation of that draw, and its <em>Preset</em>
-      menu reproduces the papers' ring scenarios (128 m radius, 37 vehicles,
-      11.6 m/s, \(\Delta t = 0.2\)&nbsp;s). The draws are correlated using the
-      signs arXiv:2210.03571 §V-B1 reports for the posterior — positive for
-      \((T, v_0)\), \((T,\beta)\), \((\alpha,\beta)\), negative for
-      \((v_0,s_0)\), \((v_0,\alpha)\), \((s_0,T)\), \((s_0,\alpha)\),
-      \((s_0,\beta)\) — since drawing them independently would contradict the
-      paper's own finding. The magnitudes in \(\boldsymbol\Sigma\) are not
-      published, so the size of the spread is a control while the structure and
-      the signs come from the papers.
-    </p>
-
-    <p>
-      What that spread <em>does</em> depends on the regime. At the recommended
-      parameters the ring is stable and stays uniform whether or not the drivers
-      differ. At either paper's calibrated \(\boldsymbol\theta\) the ring is
-      unstable and forms stop-and-go waves with no noise at all — and there,
-      making the drivers different <em>damps</em> the collective wave by roughly
-      an order of magnitude, because the vehicles stop sharing one resonant
-      response. Switch the noise back on and heterogeneity mildly increases the
-      fluctuation instead. It is not a monotone realism knob, and the vivid
-      waves in the heterogeneous presets come mostly from
-      \(\boldsymbol\theta\), not from the spread.
+      as well. The <a href="index.html">simulator's</a> <em>Preset</em> menu
+      does load each paper's ring geometry and calibrated \(\theta\), but keeps
+      every driver identical.
     </p>
 
     <!-- ============================================================ -->

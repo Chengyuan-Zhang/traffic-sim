@@ -32,28 +32,16 @@ python -m http.server 8000
 node tests/invariants.js
 ```
 
-Zero dependencies and no test framework — just Node. `tests/browser-stub.js`
-fakes enough of the DOM and canvas APIs to boot `simulation.js` and
-`compare.js` under Node, optionally stripping their IIFE wrapper so a test can
-reach the internals, so the assertions run against the code that actually
-ships rather than a re-implementation.
+Zero dependencies, no framework. `tests/browser-stub.js` fakes enough of the
+DOM and canvas APIs to boot `simulation.js` and `compare.js` under Node, so the
+assertions run against the code that actually ships rather than a copy of it.
 
-The suite locks down the things that are easy to break silently: the published
-constants from Table 1 of each paper and every value in the paper presets,
-AR(p) stationarity and marginal scale, the ring geometry (no overlaps, no
-overtaking, each driver's own standstill distance respected, including at the
-extreme ends of the sliders), Δt-invariance of the noise, the correlation
-structure of each residual process, the shape and correlation signs of the
-per-driver parameter draws, equilibrium initialisation, the feasible-packing
-limit, and hostile URL parameters. It runs deterministically in about twenty
-seconds.
-
-Assertions are checked by mutation, not just by passing: reintroducing the
-modular-gap clamp, recording η every integration step, reverting σ to an AR
-innovation scale, perturbing a published coefficient, clamping with the
-population $s_0$ instead of the driver's, drawing the parameters
-independently, and dropping the time weighting from the white-noise average
-each fail exactly the intended check.
+The suite covers the things that are easy to break silently: the published
+constants from each paper and every value in the presets, AR(p) stationarity
+and marginal scale, ring geometry (no overlaps, no overtaking, even at the
+extremes of the sliders), Δt-invariance of the noise, the correlation structure
+of each residual, equilibrium initialisation, the feasible-packing limit, and
+hostile URL parameters. Deterministic, about fifteen seconds.
 
 ## What's implemented
 
@@ -106,74 +94,26 @@ so that $\dot v_n = f_\text{IDM} + \eta_n(t)$. Three models are available:
 
 ## Paper scenarios
 
-The **Preset** control reproduces the ring-road setups from the two papers.
-All three use the geometry both papers state — a 128 m radius (circumference
-≈ 804 m), 37 vehicles, an initial speed of 11.6 m/s and Δt = 0.2 s — after
+The **Preset** control loads the ring-road setups from the two papers. All three
+use the geometry both papers state — a 128 m radius (circumference ≈ 804 m),
+37 vehicles, an initial speed of 11.6 m/s and Δt = 0.2 s — after
 [Sugiyama et al. (2008)](https://doi.org/10.1088/1367-2630/10/3/033001):
 
-| Preset | Parameters | Noise |
+| Preset | $\theta = [v_0, s_0, T, \alpha, \beta]$ | Noise |
 | --- | --- | --- |
-| MA-IDM ring — homogeneous (Fig. 10a) | $\theta_\text{rec} = [33.3, 2.0, 1.6, 1.5, 1.67]$, every driver identical | White, $\sigma = 0.204$ |
-| MA-IDM ring — heterogeneous (Fig. 10b) | Hierarchical posterior mean $[16.92, 3.54, 1.18, 0.55, 2.15]$ | GP, $\sigma_k = 0.202$, $\ell = 1.435$ s |
-| Dynamic-IDM ring — dense (Fig. 10c) | $p=5$ posterior mean $[27.10, 2.84, 1.24, 0.81, 3.42]$ | AR(5), marginal $\sigma = 0.143$ |
+| MA-IDM ring — recommended θ (Fig. 10a) | $[33.3, 2.0, 1.6, 1.5, 1.67]$ | White, $\sigma = 0.204$ |
+| MA-IDM ring — calibrated θ (Fig. 10b) | $[16.92, 3.54, 1.18, 0.55, 2.15]$ | GP, $\sigma_k = 0.202$, $\ell = 1.435$ s |
+| Dynamic-IDM ring — dense (Fig. 10c) | $[27.10, 2.84, 1.24, 0.81, 3.42]$ | AR(5), marginal $\sigma = 0.143$ |
 
-One caveat on the first row: the MA-IDM paper says Fig. 10(a) uses "random white
-noise" but never states its level. The 0.204 m/s² above is that paper's own
-population-level Bayesian IDM value from Table I. (Do not use 0.240 — that is
-the *dynamic-regression* paper's Bayesian IDM row, a different fit.)
+Two caveats. The MA-IDM paper says Fig. 10(a) uses "random white noise" but
+never states its level; the 0.204 m/s² above is that paper's own
+population-level Bayesian IDM value from Table I. And Fig. 10(b)/(c)
+additionally sample $\theta$ per vehicle from the fitted posterior, which this
+demo does not — every driver here shares one $\theta$.
 
-Running each for the papers' own 3000 s reproduces the contrast they describe:
-the homogeneous scenario settles into a near-uniform state (mean speed 9.5 m/s,
-spread of the ring-average speed 0.03 m/s), while both heterogeneous scenarios
-develop full stop-and-go waves with vehicles reaching a standstill.
-
-Be careful about *why*, though. The difference is driven mainly by $\theta$, not
-by the heterogeneity: the recommended parameters put the ring in a stable
-regime, whereas both papers' calibrated parameters put it in an unstable one.
-Switching heterogeneity off in either heterogeneous preset barely changes the
-mean speed. See below for what heterogeneity does on its own.
-
-### Driver heterogeneity
-
-Both papers' ring experiments draw each vehicle's parameters from the fitted
-posterior rather than giving every driver the same $\theta$ — that hierarchical
-structure is one of their main contributions. The model is
-
-$$\ln(\theta_d) \sim \mathcal{N}\big(\ln(\theta),\,\Sigma\big),$$
-
-i.e. log-normal per-driver variation whose median is the population value. The
-**Driver heterogeneity** slider is the log-scale standard deviation of that
-draw; values are clipped at ±2 sd, which puts about 5% of draws on the boundary
-and shrinks the realised spread to roughly 0.96 of the nominal figure.
-
-The draws are **correlated**, not independent. arXiv:2210.03571 §V-B1 reports
-the signs of the strong posterior correlations — positive for $(T, v_0)$,
-$(T, \beta)$ and $(\alpha, \beta)$, negative for $(v_0, s_0)$, $(v_0, \alpha)$,
-$(s_0, T)$, $(s_0, \alpha)$ and $(s_0, \beta)$ — so drawing the five parameters
-independently would contradict the paper's own finding. A single correlation
-strength of 0.4 is applied to every reported pair.
-
-> The magnitudes in $\Sigma$ are **not published**, so the size of the spread
-> and that 0.4 are controls, not paper values. The structure and the signs are
-> the papers'; the numbers are not. Set the slider to 0 to recover the
-> homogeneous setting exactly.
-
-**What heterogeneity actually does is regime-dependent.** Standard deviation of
-the ring-average speed over 3000 s, 5 seeds, at each preset's own $\theta$:
-
-| $\theta$ | no noise, identical | no noise, spread 0.15 | GP noise, identical | GP noise, spread 0.15 |
-| --- | --- | --- | --- | --- |
-| $\theta_\text{rec}$ (recommended) | 0.000 | 0.000 | 0.072 | 0.074 |
-| MA-IDM posterior mean | **2.023** | **0.204** | 0.525 | 0.580 |
-| Dynamic-IDM $p=5$ posterior mean | **1.724** | **0.146** | 0.390 | 0.503 |
-
-At the recommended parameters the ring is stable and stays uniform with or
-without heterogeneity. At either paper's calibrated parameters the *identical*
-ring is the unstable one — it forms stop-and-go waves with no noise at all —
-and giving the drivers different parameters **damps** that collective wave by
-about an order of magnitude, because the vehicles no longer share a single
-resonant response. Once noise is switched on, heterogeneity mildly increases
-the fluctuation instead. It is not a monotone "more realism" knob.
+The contrast is still worth watching: with the recommended parameters the ring
+stays close to uniform, while at either paper's calibrated parameters it goes
+unstable and forms stop-and-go waves on its own.
 
 ## Controllable parameters
 
@@ -186,7 +126,6 @@ Everything is adjustable from the sidebar while the simulation is running.
 | Preset | Custom / three paper scenarios | Jumps to the ring setups published in the two papers (see above). |
 | Number of cars | 5 – 80 | Vehicles on the ring. Capped at the feasible packing $N(\ell_\text{car}+s_0)\le 2\pi R$. |
 | Ring radius (m) | 60 – 250 | Track length $L = 2\pi R$; density $= N/L$. |
-| Driver heterogeneity | 0 – 0.4 | Log-scale sd of the per-driver parameter draw. 0 = identical drivers. |
 
 **IDM parameters**
 
@@ -271,30 +210,22 @@ comparison table.
 ## Known limitations
 
 This is a research-*inspired* teaching demo, not a reproduction of either
-paper. The things most worth knowing before drawing conclusions from it:
+paper. Worth knowing before drawing conclusions from it:
 
-- Acceleration noise is passed through a `5·tanh(η/5)` soft saturation before
-  it is applied, which is not part of any of the displayed equations. At the
-  default σ it is inert; at large σ it noticeably compresses the tails.
+- Every driver shares one parameter vector. Both papers' ring experiments draw
+  per-driver parameters from the fitted posterior, which is not published.
 - Integration is semi-implicit Euler; both papers use the ballistic update
   $x(t+\Delta t)=x+v\Delta t+\tfrac12 a\Delta t^2$.
-- A hard overlap clamp keeps the bumper-to-bumper gap at or above $s_0$. It is
-  a safety net, not physics — at large σ or large $\Delta t$ it can intervene
-  often enough to dominate the dynamics.
-- The GP is drawn with $M=32$ random Fourier features, which reproduce the
-  target covariance in expectation; a single realisation deviates from it and
-  is only approximately Gaussian. The papers use conditional Gaussian sampling.
-- Flow is computed as density × space-mean speed on the measuring arc, not from
-  detector crossings or Edie's generalised definitions. The four sub-bin points
-  in the fundamental diagram are a spatial cross-section and are deliberately
-  drawn unconnected; only the whole-arc series is a time trajectory.
-- All drivers share one parameter vector unless the **Driver heterogeneity**
-  slider is raised. The papers' ring experiments draw per-driver parameters
-  from the fitted posterior; this demo reproduces the *structure* of that draw
-  but not its published magnitude, which is not available.
-- Matérn 3/2 and 1/2 kernels, and AR orders above the paper's recommended
-  $p\approx4$–$6$, are exposed for exploration; the papers calibrate the
-  squared-exponential kernel and mention Matérn 5/2 only.
+- Acceleration noise passes through a `5·tanh(η/5)` soft saturation that is not
+  in any of the displayed equations. Inert at the default σ, noticeable at large σ.
+- A hard clamp keeps the bumper-to-bumper gap at or above $s_0$. It is a safety
+  net, not physics, and at large σ or large $\Delta t$ it can dominate.
+- The GP uses $M=32$ random Fourier features, which match the target covariance
+  in expectation only. The papers use conditional Gaussian sampling.
+- Flow is density × space-mean speed on the measuring arc, not detector
+  crossings or Edie's generalised definitions.
+- Matérn 3/2 and 1/2, and AR orders outside the paper's recommended
+  $p\approx4$–$6$, are exposed for exploration rather than taken from the papers.
 
 ## Files
 

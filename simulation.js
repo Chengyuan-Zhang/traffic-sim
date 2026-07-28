@@ -76,10 +76,6 @@
     noiseMode: "gp",    // "gp" | "ar" | "white"
     arOrder: 2,         // AR(p) order; uses paper-calibrated ρ for this order
 
-    // Per-driver heterogeneity. Both papers model it as ln(θ_d) ~ N(ln(θ), Σ)
-    // — log-normal variation whose median is the population parameter. This is
-    // the log-scale standard deviation; 0 reproduces the homogeneous setting.
-    hetero: 0,
     // Initial speed (m/s). 0 means "use the IDM equilibrium speed for the
     // starting density"; the paper scenarios pin it to their stated 11.6 m/s.
     initialSpeed: 0,
@@ -116,9 +112,8 @@
     gpKernel:     { type: "enum", values: ["rbf", "matern52", "matern32", "matern12"] },
     noiseMode:    { type: "enum", values: ["gp", "ar", "white"] },
     arOrder:      { type: "enum", values: [1, 2, 3, 4, 5, 6, 7], numeric: true },
-    hetero:       { type: "num",  min: 0,    max: 0.4  },
     initialSpeed: { type: "num",  min: 0,    max: 40   },
-    preset:       { type: "enum", values: ["custom", "ma-homog", "ma-hetero", "dr-dense"] },
+    preset:       { type: "enum", values: ["custom", "ma-rec", "ma-post", "dr-dense"] },
     regionCenter: { type: "num",  min: 0,    max: 359  },
     regionSpan:   { type: "num",  min: 10,   max: 360  },
     seed:         { type: "int",  min: 0,    max: 2147483647 },
@@ -394,63 +389,12 @@
   }
 
   // Largest vehicle count that physically fits: N*(carLength + s0) <= L.
-  // With heterogeneity on, use the largest s0 a driver can draw so that the
-  // bound still holds for the unluckiest ring.
   function maxFeasibleCars() {
-    const s0Max = params.s0 * Math.exp(HETERO_CLIP * Math.max(0, params.hetero));
-    return Math.max(2, Math.floor(circumference() / (params.carLength + s0Max)));
-  }
-
-  // ---------- driver heterogeneity ----------
-  // Both papers place log-normal variation around the population parameter,
-  //   ln(θ_d) ~ N(ln(θ), Σ)      (MA-IDM Eq. 11f; dynamic IDM Eq. 11)
-  // and their ring experiments draw each vehicle's θ from that posterior.
-  //
-  // The magnitude of Σ is not published, so it is a control (`params.hetero`,
-  // the log-scale standard deviation). Its *correlation structure* partly is:
-  // arXiv:2210.03571 §V-B1 reports "Strong positive correlations exist in pairs
-  // of (T, v0), (T, β), and (α, β); while strong negative correlations exist in
-  // the pairs of (v0, s0), (v0, α), (s0, T), (s0, α), and (s0, β)" — signs but
-  // no values, and (v0, β) / (T, α) are not called out. A single strength
-  // r = 0.4 is applied to every reported pair; the resulting matrix stays
-  // positive definite up to r ≈ 0.495. HETERO_CHOL is the lower-triangular
-  // Cholesky factor of I + 0.4·S in the papers' order [v0, s0, T, α, β], so
-  // L·z with z ~ N(0, I) gives correlated standard normals. Drawing the five
-  // parameters independently would contradict the paper's own finding — it
-  // would produce drivers with, say, a low α beside a high β.
-  const HETERO_PARAMS = ["v0", "s0", "T", "a", "b"];
-  const HETERO_CHOL = [
-    [ 1.000000,  0,         0,         0,         0        ],
-    [-0.400000,  0.916515,  0,         0,         0        ],
-    [ 0.400000, -0.261861,  0.878310,  0,         0        ],
-    [-0.400000, -0.611010,  0,         0.683130,  0        ],
-    [ 0,        -0.436436,  0.325300,  0.195180,  0.815848 ],
-  ];
-  // Draws are CLIPPED (not resampled) at ±2 sd so the feasible-packing bound in
-  // maxFeasibleCars() stays exact. About 4.6 % of draws land on the boundary
-  // and the realised spread is ~0.96 of the nominal value.
-  const HETERO_CLIP = 2;
-  function sampleDriverMultipliers() {
-    const m = {};
-    const sd = params.hetero;
-    if (!(sd > 0)) {
-      for (const k of HETERO_PARAMS) m[k] = 1;
-      return m;
-    }
-    const z = [randn(), randn(), randn(), randn(), randn()];
-    for (let i = 0; i < HETERO_PARAMS.length; i++) {
-      let x = 0;
-      for (let j = 0; j <= i; j++) x += HETERO_CHOL[i][j] * z[j];
-      x = Math.max(-HETERO_CLIP, Math.min(HETERO_CLIP, x));
-      m[HETERO_PARAMS[i]] = Math.exp(sd * x);   // median-preserving
-    }
-    return m;
+    return Math.max(2, Math.floor(circumference() / (params.carLength + params.s0)));
   }
 
   // IDM equilibrium speed for a steady state with net gap `s` (Δv = 0):
   // solves 1 - (v/v0)^δ - ((s0 + vT)/s)^2 = 0, strictly decreasing on [0, v0].
-  // Uses the population parameters; with heterogeneity on it is a reference
-  // value, not the equilibrium of any particular driver.
   function equilibriumSpeed(s) {
     const { v0, T, s0, delta } = params;
     if (!(s > s0) || !(v0 > 0)) return 0;
@@ -492,8 +436,6 @@
         v: vInit,
         color: colorFor(i, n),
         perturbUntil: 0,
-        // Per-driver multipliers on [v0, s0, T, a, b]; all 1 when hetero = 0.
-        m: sampleDriverMultipliers(),
         gp: sampleGPFeatures(params.gpEll, params.gpKernel),
         // Left empty on purpose: arNoise() builds the stationary state lazily,
         // so no burn-in is paid in GP/White mode or while dragging a slider.
@@ -512,19 +454,12 @@
   }
 
   // ---------- IDM ----------
-  // Parameters are read per driver: params.X is the population value and
-  // car.m.X the driver's multiplier (1 for everyone when heterogeneity is off).
-  function idmAccel(car, v, vLead, gap) {
-    const m = car.m;
-    const v0 = params.v0 * m.v0;
-    const T = params.T * m.T;
-    const a = params.a * m.a;
-    const b = params.b * m.b;
-    const s0 = params.s0 * m.s0;
+  function idmAccel(v, vLead, gap) {
+    const { v0, T, a, b, s0, delta } = params;
     const deltaV = v - vLead;
     const sStar = s0 + Math.max(0, v * T + (v * deltaV) / (2 * Math.sqrt(a * b)));
     const safeGap = Math.max(gap, 0.01);
-    return a * (1 - Math.pow(v / v0, params.delta) - Math.pow(sStar / safeGap, 2));
+    return a * (1 - Math.pow(v / v0, delta) - Math.pow(sStar / safeGap, 2));
   }
 
   function step(dt) {
@@ -537,7 +472,7 @@
       const me = cars[i];
       const lead = cars[(i + 1) % n];
       const gap = ringGap(lead.s, me.s, L);
-      let acc = idmAccel(me, me.v, lead.v, gap);
+      let acc = idmAccel(me.v, lead.v, gap);
 
       // Driver noise: GP (MA-IDM), AR(p) (DR-IDM), or white (B-IDM baseline).
       // σ is the MARGINAL std in every mode (the AR innovation is divided by the
@@ -585,10 +520,9 @@
     // Descending order propagates a correction backwards along the platoon; a
     // second pass closes the wrap-around seam.
     const cl = params.carLength;
+    const minGap = params.s0;
     for (let pass = 0; pass < 2; pass++) {
       for (let i = n - 1; i >= 0; i--) {
-        // Each driver keeps its own standstill distance when heterogeneity is on.
-        const minGap = params.s0 * cars[i].m.s0;
         const leadU = (i === n - 1) ? u[0] + L : u[i + 1];
         if (leadU - u[i] - cl >= minGap) continue;
         u[i] = leadU - cl - minGap;
@@ -1103,9 +1037,7 @@
       xFD.font = "10px -apple-system, Segoe UI, sans-serif";
       xFD.textAlign = "left";
       xFD.textBaseline = "bottom";
-      xFD.fillText(
-        params.hetero > 0 ? "IDM equilibrium q(ρ) — population θ" : "IDM equilibrium q(ρ)",
-        kToX(peak.k) + 6, Math.max(12, qToY(peak.q) - 4));
+      xFD.fillText("IDM equilibrium q(ρ)", kToX(peak.k) + 6, Math.max(12, qToY(peak.q) - 4));
     }
 
     // Trajectory polyline for the measuring arc as a whole. These points ARE a
@@ -1429,13 +1361,6 @@
   bindRange("regionSpan", "regionSpan", (v) => String(v | 0) + "°");
   bindRange("gpSigma", "gpSigma", (v) => v.toFixed(3));
   bindRange("gpEll", "gpEll", (v) => v.toFixed(3));
-  bindRange("hetero", "hetero", (v) => v.toFixed(2));
-
-  // Redrawing the per-driver multipliers needs a fresh population.
-  document.getElementById("hetero").addEventListener("change", () => {
-    initCars();
-    resetCharts();
-  });
 
   // AR order dropdown (not a range slider)
   const arOrderEl = document.getElementById("arOrder");
@@ -1550,8 +1475,6 @@
   }
   document.getElementById("radius").addEventListener("input", syncFeasibleCars);
   document.getElementById("s0").addEventListener("input", syncFeasibleCars);
-  // hetero widens the largest s0 a driver can draw, so it moves the bound too.
-  document.getElementById("hetero").addEventListener("input", syncFeasibleCars);
   syncFeasibleCars();
 
   document.getElementById("perturb").addEventListener("click", () => {
@@ -1574,13 +1497,12 @@
   // IDM parameters are the posterior means printed in Table I / Table 1, in the
   // paper's own order θ = [v0, s0, T, α, β]. σ values likewise.
   //
-  // `hetero` is the ONE number here that is not from a paper: both ring
-  // experiments draw each vehicle's θ from the fitted posterior, but that
-  // posterior's covariance is not published. The value below is an illustrative
-  // spread chosen so the qualitative contrast the papers describe is visible.
+  // Every driver here shares one θ. The papers' Fig. 10(b)/(c) additionally
+  // sample θ per vehicle from the fitted posterior, which this demo does not:
+  // the posterior itself is not published.
   const PRESETS = {
-    "ma-homog": {
-      label: "MA-IDM ring, homogeneous",
+    "ma-rec": {
+      label: "MA-IDM ring, recommended θ",
       // Fig. 10(a): "the parameters are taken as the recommendation values",
       // θ_rec = [33.3, 2.0, 1.6, 1.5, 1.67], with "random white noise". The
       // figure's noise level is NOT stated, so σ is taken from that paper's own
@@ -1590,27 +1512,25 @@
       params: {
         radius: 128, numCars: 37, dtStep: 0.2, initialSpeed: 11.6,
         v0: 33.3, s0: 2.0, T: 1.6, a: 1.5, b: 1.67, delta: 4,
-        noiseMode: "white", gpSigma: 0.204, hetero: 0,
+        noiseMode: "white", gpSigma: 0.204,
       },
-      note: 'MA-IDM Fig. 10(a): 128 m ring, 37 vehicles, 11.6 m/s, Δt = 0.2 s, every ' +
-            'driver identical with the recommended θ = [33.3, 2.0, 1.6, 1.5, 1.67]. ' +
-            'The figure\'s noise level is not stated; σ = 0.204 m/s² is Table I\'s ' +
-            'population-level Bayesian IDM value.',
+      note: 'MA-IDM Fig. 10(a): 128 m ring, 37 vehicles, 11.6 m/s, Δt = 0.2 s, with the ' +
+            'recommended θ = [33.3, 2.0, 1.6, 1.5, 1.67]. The figure\'s noise level is ' +
+            'not stated; σ = 0.204 m/s² is Table I\'s population-level Bayesian IDM value.',
     },
-    "ma-hetero": {
-      label: "MA-IDM ring, heterogeneous",
-      // Fig. 10(b): "the parameters are sampled from the posteriors in the
-      // hierarchical MA-IDM", whose posterior mean is θ = [16.919, 3.538, 1.183,
-      // 0.553, 2.147] with σ_k = 0.202 m/s² and ℓ = 1.435 s (Table I).
+    "ma-post": {
+      label: "MA-IDM ring, calibrated θ",
+      // Fig. 10(b) uses the hierarchical MA-IDM posterior, whose mean is
+      // θ = [16.919, 3.538, 1.183, 0.553, 2.147] with σ_k = 0.202 m/s² and
+      // ℓ = 1.435 s (Table I).
       params: {
         radius: 128, numCars: 37, dtStep: 0.2, initialSpeed: 11.6,
         v0: 16.92, s0: 3.54, T: 1.18, a: 0.55, b: 2.15, delta: 4,
-        noiseMode: "gp", gpSigma: 0.202, gpEll: 1.435, gpKernel: "rbf", hetero: 0.15,
+        noiseMode: "gp", gpSigma: 0.202, gpEll: 1.435, gpKernel: "rbf",
       },
-      note: 'MA-IDM Fig. 10(b): same ring, but θ is the hierarchical posterior mean ' +
-            '[16.92, 3.54, 1.18, 0.55, 2.15] with GP noise σ_k = 0.202 m/s², ℓ = 1.435 s. ' +
-            'At this θ the ring is already unstable with identical drivers; the ' +
-            'heterogeneity slider sets a spread the paper does not publish.',
+      note: 'MA-IDM Fig. 10(b): same ring, with θ set to the hierarchical posterior mean ' +
+            '[16.92, 3.54, 1.18, 0.55, 2.15] and GP noise σ_k = 0.202 m/s², ℓ = 1.435 s. ' +
+            'At this θ the ring is unstable and forms stop-and-go waves on its own.',
     },
     "dr-dense": {
       label: "Dynamic-IDM ring, dense",
@@ -1620,7 +1540,7 @@
       params: {
         radius: 128, numCars: 37, dtStep: 0.2, initialSpeed: 11.6,
         v0: 27.10, s0: 2.84, T: 1.24, a: 0.81, b: 3.42, delta: 4,
-        noiseMode: "ar", arOrder: 5, gpSigma: 0.143, hetero: 0.15,
+        noiseMode: "ar", arOrder: 5, gpSigma: 0.143,
       },
       note: 'Dynamic-IDM Fig. 10(c), dense traffic: 37 vehicles, θ = [27.10, 2.84, 1.24, ' +
             '0.81, 3.42] from Table 1 at p = 5. The paper\'s innovation σ_η = 0.016 m/s² ' +
