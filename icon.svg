@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="t">
+  <title id="t">traffic-sim: two cars on a ring road</title>
+  <!-- A real favicon file, not the data: URI this site used before. Google only
+       shows a favicon in search results if it can crawl it at a stable URL, and
+       data: URIs are not crawlable. The dark plate keeps the ring legible on the
+       white background search results and bookmark bars use. -->
+  <rect width="64" height="64" rx="14" fill="#0f1720"/>
+  <circle cx="32" cy="32" r="21" fill="none" stroke="#4fc3f7" stroke-width="7"/>
+  <circle cx="32" cy="11" r="5" fill="#ffb74d"/>
+  <circle cx="53" cy="32" r="5" fill="#81c784"/>
+</svg>

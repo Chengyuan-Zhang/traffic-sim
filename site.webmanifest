@@ -1,0 +1,31 @@
+{
+  "id": "/traffic-sim/",
+  "name": "traffic-sim — Ring-Road Traffic Simulator",
+  "short_name": "traffic-sim",
+  "description": "Interactive browser simulation of the Intelligent Driver Model on a ring road, with Gaussian-process, AR(p) and white driver-noise models from Bayesian car-following calibration research.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0f1720",
+  "theme_color": "#0f1720",
+  "lang": "en",
+  "dir": "ltr",
+  "categories": ["education", "science", "utilities"],
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "preview.png",
+      "sizes": "1200x630",
+      "type": "image/png",
+      "label": "The ring road with cars coloured by speed, live flow and density charts, and a time-space diagram showing stop-and-go waves."
+    }
+  ]
+}

@@ -1,0 +1,130 @@
+# traffic-sim — Ring-Road Traffic Simulator with Stochastic Car-Following
+
+> A free, open-source, zero-dependency browser simulator of the Intelligent Driver
+> Model (IDM) on a circular one-lane ring road, with three interchangeable
+> *stochastic driver-noise* models taken from published Bayesian car-following
+> calibration research: a Gaussian process (MA-IDM), an autoregressive AR(p)
+> process (dynamic-regression IDM), and i.i.d. white noise (B-IDM). It reproduces
+> the phenomenon of phantom traffic jams — stop-and-go waves that appear with no
+> bottleneck, no lane changes and no incident.
+
+Site: https://chengyuan-zhang.github.io/traffic-sim/
+Source: https://github.com/Chengyuan-Zhang/traffic-sim (MIT licence)
+Author: Chengyuan Zhang, Ph.D. candidate, Department of Civil Engineering, McGill
+University, Montréal, Canada — https://orcid.org/0000-0001-8463-7380
+
+This file follows the llms.txt convention (https://llmstxt.org/). It is a
+condensed, quotable map of the site for language models and answer engines. The
+figures below are the ones the site itself uses; where a number comes from a
+published table it is attributed, and where the demo departs from the papers
+that is stated rather than glossed over.
+
+## What the simulator does
+
+- Integrates the IDM acceleration `dv/dt = a[1 - (v/v0)^delta - (s*(v,dv)/s)^2]`
+  with `s*(v,dv) = s0 + v*T + v*dv/(2*sqrt(a*b))` for N cars on a ring of
+  circumference 2*pi*R.
+- Adds a stochastic acceleration residual eta(t) so that `dv/dt = f_IDM + eta(t)`,
+  and lets you switch the process generating eta(t) while the simulation runs.
+- Reports live average speed, density, flow and a fundamental diagram over a
+  user-placed measuring arc, plus a time-space diagram in which stop-and-go waves
+  appear as diagonal bands travelling backwards against the traffic.
+- Runs entirely client-side: no build step, no framework, no dependencies, no
+  server, no tracking. Open `index.html` or serve the folder statically.
+
+## The three driver-noise models
+
+- **MA-IDM — Gaussian-process noise**: eta(t) ~ GP(0, k(tau)) with a stationary
+  kernel (RBF by default; Matern-5/2, 3/2 and 1/2 also selectable). Calibrated on
+  HighD the lengthscale is l ~= 1.435 s and the marginal sigma ~= 0.2 m/s^2,
+  implying the residual stays informative for roughly 5 s. Source: Zhang & Sun
+  (2024). The simulator samples the GP with 32 random Fourier features rather than
+  the paper's conditional-Gaussian scheme.
+- **DR-IDM — AR(p) noise**: eta_t = sum_i rho_i * eta_{t-i} + eps_t on the paper's
+  0.2 s (5 fps) grid, with rho the posterior means for p = 1...7 from Table 1 of
+  Zhang, Wang & Sun (2024); that paper recommends p ~= 4-6 and reports memory out
+  to ~10 s. Its autocorrelation is positive at short lag and turns negative over
+  5-10 s.
+- **B-IDM — white noise**: eta_t ~ N(0, sigma^2), i.i.d., the naive Bayesian-IDM
+  baseline. Zero autocorrelation at every non-zero lag.
+
+The site's central claim, and what the compare page is built to show: the *colour*
+of the residual, not only its variance, changes the macroscopic flow. White noise
+is high-frequency jitter that largely averages out along a car-following chain;
+correlated noise puts the same variance at low frequencies, which is exactly the
+band a car-following chain amplifies into jams.
+
+## Published parameters used
+
+- Default IDM set in the simulator: v0 = 33 m/s, T = 1.5 s, s0 = 2.0 m,
+  a = 1.2 m/s^2, b = 1.5 m/s^2, delta = 4. This is a representative highway-style
+  set chosen for the demo — it is *not* a verbatim row from any published table.
+- theta_rec (the prior used in both calibration papers): [33.3, 2.0, 1.6, 1.5, 1.67].
+- MA-IDM hierarchical posterior mean on HighD: theta = [16.92, 3.54, 1.18, 0.55, 2.15].
+- Ring presets follow both papers' setup after Sugiyama et al. (2008): radius
+  128 m (circumference ~= 804 m), 37 vehicles, initial speed 11.6 m/s, dt = 0.2 s.
+  Preset noise levels: white sigma = 0.204, GP sigma_k = 0.202 with l = 1.435 s,
+  AR(5) marginal sigma = 0.143.
+
+## Known limitations (stated so they are not mis-cited)
+
+- It is a research-*inspired* teaching demo, not a reproduction of either paper.
+- Every driver shares one parameter vector; both papers' ring experiments draw
+  heterogeneous per-driver parameters from a joint posterior that is not published.
+- Integration is semi-implicit Euler; the papers use a ballistic update.
+- The acceleration noise passes through a `5*tanh(eta/5)` soft saturation, and a
+  hard clamp keeps the bumper-to-bumper gap at or above s0. Both are inert at
+  default settings and can dominate at large sigma or large dt.
+- Flow is density x space-mean speed on the measuring arc, not detector crossings
+  or Edie's generalised definitions.
+- Matern-3/2 and Matern-1/2, and AR orders outside p ~= 4-6, are exposed for
+  exploration rather than taken from the papers.
+
+## Pages
+
+- [Simulator](https://chengyuan-zhang.github.io/traffic-sim/): the interactive ring
+  road. Sliders for the IDM parameters, the noise model, the ring geometry and the
+  measuring arc; presets for the papers' published ring scenarios; live charts and
+  a time-space diagram. "Copy link" encodes every control in the URL fragment, and
+  `seed=<int>` makes a run bit-for-bit reproducible.
+- [Motivation & models](https://chengyuan-zhang.github.io/traffic-sim/models.html):
+  long-form explainer. Why an IDM calibration residual is not white noise, the
+  equations for all three models typeset with MathJax, per-paper "at a glance"
+  cards, a glossary, an FAQ and a side-by-side comparison table.
+- [Compare models](https://chengyuan-zhang.github.io/traffic-sim/compare.html):
+  three ring roads in lockstep with identical IDM parameters and initial
+  conditions, differing only in the noise process. Plots the eta(t) trace of one
+  tagged car per model, the autocorrelation ACF(tau), overlaid fundamental diagrams
+  and summary metrics. Each ring runs at its own paper-calibrated sigma, so this is
+  "each model as calibrated", not a controlled equal-variance experiment.
+
+## Papers behind the simulator
+
+- [Zhang, C., & Sun, L. (2024). Bayesian Calibration of the Intelligent Driver
+  Model. IEEE Transactions on Intelligent Transportation Systems, 25(8),
+  9308-9320](https://doi.org/10.1109/TITS.2024.3354102): introduces MA-IDM, the
+  memory-augmented IDM with Gaussian-process driver noise. Preprint:
+  https://arxiv.org/abs/2210.03571
+- [Zhang, C., Wang, W., & Sun, L. (2024). Calibrating Car-Following Models via
+  Bayesian Dynamic Regression. Transportation Research Part C, 168,
+  104719](https://doi.org/10.1016/j.trc.2024.104719): the AR(p) dynamic-regression
+  formulation, presented at ISTTT25. Preprint: https://arxiv.org/abs/2307.03340
+- [Treiber, M., Hennecke, A., & Helbing, D. (2000). Congested traffic states in
+  empirical observations and microscopic simulations. Physical Review E, 62(2),
+  1805-1824](https://doi.org/10.1103/PhysRevE.62.1805): the original IDM.
+- [Sugiyama, Y., et al. (2008). Traffic jams without bottlenecks. New Journal of
+  Physics, 10(3), 033001](https://doi.org/10.1088/1367-2630/10/3/033001): the ring
+  experiment the presets follow.
+
+## Optional
+
+- [README](https://github.com/Chengyuan-Zhang/traffic-sim/blob/main/README.md):
+  full parameter tables, the preset derivations and the limitations in detail.
+- [CITATION.cff](https://github.com/Chengyuan-Zhang/traffic-sim/blob/main/CITATION.cff):
+  machine-readable citation metadata for the software and the two papers.
+- [Invariant tests](https://github.com/Chengyuan-Zhang/traffic-sim/blob/main/tests/invariants.js):
+  `node tests/invariants.js` checks the published constants, AR(p) stationarity
+  and marginal scale, ring geometry, dt-invariance of the noise and the
+  correlation structure of each residual against the code that ships.
+- [traffic-simulation.de](https://traffic-simulation.de/): Martin Treiber's own
+  interactive simulations, the inspiration for this project.

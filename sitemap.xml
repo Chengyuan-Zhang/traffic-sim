@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Sitemap for traffic-sim.
+
+  It lives at https://chengyuan-zhang.github.io/traffic-sim/sitemap.xml and
+  only lists URLs at or below its own directory, which is what the sitemap
+  protocol requires of a sitemap that is not at the origin root. Unlike
+  robots.txt, that makes this file fully effective from a GitHub Pages project
+  path — it just has to be submitted directly (Search Console / Bing Webmaster
+  Tools) or discovered through the `Sitemap:` line in the origin robots.txt.
+
+  `lastmod` is the one hint search engines still act on; changefreq and
+  priority are advisory and widely ignored, kept here only for the smaller
+  crawlers that do read them. Bump lastmod when a page's content changes.
+-->
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+        xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">
+
+  <url>
+    <loc>https://chengyuan-zhang.github.io/traffic-sim/</loc>
+    <lastmod>2026-09-18</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>1.0</priority>
+    <image:image>
+      <image:loc>https://chengyuan-zhang.github.io/traffic-sim/preview.png</image:loc>
+      <image:title>Ring-road traffic simulator with stochastic driver noise</image:title>
+      <image:caption>Screenshot of the traffic-sim ring road: cars coloured by speed, with the time-space diagram showing stop-and-go waves.</image:caption>
+    </image:image>
+  </url>
+
+  <url>
+    <loc>https://chengyuan-zhang.github.io/traffic-sim/models.html</loc>
+    <lastmod>2026-09-18</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.9</priority>
+  </url>
+
+  <url>
+    <loc>https://chengyuan-zhang.github.io/traffic-sim/compare.html</loc>
+    <lastmod>2026-09-18</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+
+</urlset>

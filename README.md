@@ -1,4 +1,17 @@
-# traffic-sim
+# traffic-sim — an interactive ring-road traffic simulator
+
+> Phantom traffic jams, in your browser. The Intelligent Driver Model on a
+> circular road, with three published stochastic driver-noise models.
+
+[![Live demo](https://img.shields.io/badge/demo-live-4fc3f7)](https://chengyuan-zhang.github.io/traffic-sim/)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+[![Dependencies: none](https://img.shields.io/badge/dependencies-none-lightgrey)](#running-locally)
+[![DOI](https://img.shields.io/badge/DOI-10.1109%2FTITS.2024.3354102-blue)](https://doi.org/10.1109/TITS.2024.3354102)
+[![DOI](https://img.shields.io/badge/DOI-10.1016%2Fj.trc.2024.104719-blue)](https://doi.org/10.1016/j.trc.2024.104719)
+
+**[▶ Open the simulator](https://chengyuan-zhang.github.io/traffic-sim/)** ·
+[Compare noise models](https://chengyuan-zhang.github.io/traffic-sim/compare.html) ·
+[Motivation & models](https://chengyuan-zhang.github.io/traffic-sim/models.html)
 
 An interactive **stochastic ring-road traffic simulator** that runs entirely in the
 browser. Cars drive around a circular track using the
@@ -29,7 +42,8 @@ python -m http.server 8000
 ## Tests
 
 ```bash
-node tests/invariants.js
+node tests/invariants.js   # physics, presets and noise-process invariants
+node tests/seo.js          # metadata, structured data and crawl files
 ```
 
 Zero dependencies, no framework. `tests/browser-stub.js` fakes enough of the
@@ -42,6 +56,17 @@ and marginal scale, ring geometry (no overlaps, no overtaking, even at the
 extremes of the sliders), Δt-invariance of the noise, the correlation structure
 of each residual, equilibrium initialisation, the feasible-packing limit, and
 hostile URL parameters. Deterministic, about fifteen seconds.
+
+`tests/seo.js` covers the discoverability metadata, which rots more quietly
+still: titles and descriptions that outgrow their useful length, a canonical
+that drifts from `og:url`, a renamed section that silently breaks a table-of-
+contents anchor, a new page that never reaches the sitemap. Its strictest
+assertion is that every question, answer, how-to step and glossary definition
+in the JSON-LD appears **verbatim in the visible text** of the page that
+carries it — structured data that promises something the page does not say is
+the one search-engine offence that gets a site penalised rather than ignored,
+and it is exactly what an edit to the prose introduces without anyone
+noticing.
 
 ## What's implemented
 
@@ -207,6 +232,58 @@ Includes a hero figure with three sample residual traces, the IDM equations
 typeset with MathJax, per-paper "at a glance" cards, and a side-by-side
 comparison table.
 
+## Questions people ask
+
+<details>
+<summary><b>Why do traffic jams form on a ring road with no bottleneck?</b></summary>
+
+Because dense car-following is unstable. Each driver reacts to the car ahead
+with a delay and with imperfect precision, so a small speed fluctuation is
+amplified rather than damped as it travels back through the queue. Past a
+critical density the amplification wins and the disturbance grows into a
+stopped cluster that moves backwards against the traffic. Sugiyama et al.
+showed this with real drivers on a real circular track in 2008.
+</details>
+
+<details>
+<summary><b>What is driver noise, and why does its colour matter?</b></summary>
+
+Driver noise is the acceleration residual left over after a deterministic
+model is fitted to a real trajectory — everything the equation does not
+explain. On HighD it has a standard deviation around 0.2 m/s² and stays
+correlated for several seconds, so it is not white. Colour matters because a
+car-following chain is a low-pass amplifier: white noise is high-frequency
+jitter that largely averages out, while correlated noise puts the same
+variance into the low frequencies the chain amplifies into jams.
+</details>
+
+<details>
+<summary><b>What is the difference between MA-IDM, DR-IDM and B-IDM?</b></summary>
+
+All three add a random residual to the same IDM acceleration and differ only
+in the process generating it. **B-IDM** uses i.i.d. Gaussian noise with no
+memory. **DR-IDM** uses an AR(p) process, so the residual is a weighted sum of
+its own recent past plus an innovation. **MA-IDM** uses a Gaussian process with
+a stationary kernel, so memory is set smoothly by a lengthscale ℓ ≈ 1.4 s
+rather than by a fixed number of lags.
+</details>
+
+<details>
+<summary><b>Can I reproduce an exact run?</b></summary>
+
+Yes. **Copy link** encodes every control in the URL fragment; adding
+`seed=<int>` (non-zero) seeds the random-number stream as well, which makes
+the run reproducible bit for bit.
+</details>
+
+<details>
+<summary><b>Does this reproduce the results in the papers?</b></summary>
+
+No — see [Known limitations](#known-limitations) below. It is a
+research-*inspired* teaching demo, and every deviation from the papers is
+listed there rather than glossed over.
+</details>
+
 ## Known limitations
 
 This is a research-*inspired* teaching demo, not a reproduction of either
@@ -241,7 +318,54 @@ paper. Worth knowing before drawing conclusions from it:
 - `page.js` — small shared page-glue script (Copy-BibTeX, mailto obfuscation)
 - `tests/browser-stub.js` — minimal DOM/canvas stub that boots the modules under Node
 - `tests/invariants.js` — invariant and regression tests (`node tests/invariants.js`)
+- `tests/seo.js` — metadata, structured-data and crawl-file tests (`node tests/seo.js`)
+- `robots.txt` — crawl policy, including an explicit opt-in for AI crawlers
+- `sitemap.xml` — the three indexable URLs, with `lastmod`
+- `llms.txt` — a condensed, quotable map of the site for language models
+- `CITATION.cff` — machine-readable citation metadata (GitHub renders it)
+- `site.webmanifest`, `icon.svg` — installable-app metadata and a crawlable favicon
 - `.nojekyll` — tells GitHub Pages not to process with Jekyll
+
+## Discoverability
+
+Each page carries a JSON-LD `@graph` describing itself, the software, the
+author and the four cited papers as linked entities, plus an `FAQPage`, a
+`HowTo` and a `DefinedTermSet` whose text is generated from the visible
+sections and checked against them by `tests/seo.js`.
+
+**One caveat worth knowing.** Crawlers read `robots.txt` only from the origin
+root, and this site is served from a GitHub Pages *project* path. The file
+that is actually obeyed is therefore
+`https://chengyuan-zhang.github.io/robots.txt`, which belongs to the
+`chengyuan-zhang.github.io` user-site repository, not to this one. The
+`robots.txt` here is the authoritative copy of the policy and becomes live as
+written if traffic-sim ever moves to its own domain; until then, the user-site
+repo needs at least:
+
+```
+User-agent: *
+Allow: /
+
+Sitemap: https://chengyuan-zhang.github.io/traffic-sim/sitemap.xml
+```
+
+`llms.txt` is an origin-root convention too, so the same applies: a tool that
+goes looking for one will try `https://chengyuan-zhang.github.io/llms.txt`.
+The copy here is complete and correct for anything handed the path directly —
+and it is what makes the site quotable rather than merely readable — but for
+automatic discovery the user-site repo should carry a copy or a pointer to it.
+
+`sitemap.xml` has no such problem: a sitemap may live in any directory as long
+as it only lists URLs at or below itself, so this one is valid where it sits
+and can be submitted directly to Google Search Console and Bing Webmaster
+Tools.
+
+**Repository topics.** GitHub topics are a real discovery surface and are set
+through the repository settings, not through any file here. Suggested set:
+`traffic-simulation`, `intelligent-driver-model`, `car-following`,
+`traffic-flow`, `stochastic-processes`, `bayesian-calibration`,
+`gaussian-process`, `ring-road`, `stop-and-go-waves`, `javascript`,
+`canvas`, `simulation`, `transportation-research`.
 
 ## Contact
 
@@ -260,8 +384,9 @@ methodology.
 
 ## Citation
 
-If this simulator is useful in your work, please cite the two underlying
-papers:
+GitHub reads [`CITATION.cff`](CITATION.cff), so the repository's **Cite this
+repository** button produces a correct reference in APA or BibTeX. If this
+simulator is useful in your work, please cite the two underlying papers:
 
 > Zhang, C., & Sun, L. (2024). **Bayesian Calibration of the Intelligent Driver
 > Model.** *IEEE Transactions on Intelligent Transportation Systems*, 25(8),

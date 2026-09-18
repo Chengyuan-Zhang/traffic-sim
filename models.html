@@ -3,21 +3,51 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-<title>Motivation &amp; Models — traffic-sim</title>
-<meta name="description" content="Motivation and model equations behind the traffic-sim project: MA-IDM (Gaussian-process driver noise) and dynamic-regression IDM (AR(p) driver noise), from Zhang & Sun (2024) and Zhang, Wang & Sun (2024)." />
-<meta name="author" content="Chengyuan Zhang" />
-<meta name="theme-color" content="#0f1720" />
-<meta property="og:type" content="article" />
-<meta property="og:title" content="Motivation & Models — traffic-sim" />
-<meta property="og:description" content="Why stochastic car-following? A quick tour of MA-IDM and dynamic-regression IDM." />
-<meta property="og:image" content="https://chengyuan-zhang.github.io/traffic-sim/preview.png" />
-<meta property="og:url" content="https://chengyuan-zhang.github.io/traffic-sim/models.html" />
-<meta name="twitter:card" content="summary_large_image" />
-<meta name="twitter:title" content="Motivation & Models — traffic-sim" />
-<meta name="twitter:description" content="Why stochastic car-following? A quick tour of MA-IDM and dynamic-regression IDM." />
-<meta name="twitter:image" content="https://chengyuan-zhang.github.io/traffic-sim/preview.png" />
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='22' fill='none' stroke='%234fc3f7' stroke-width='8'/%3E%3Ccircle cx='32' cy='10' r='5' fill='%23ffb74d'/%3E%3Ccircle cx='54' cy='32' r='5' fill='%2381c784'/%3E%3C/svg%3E" />
+<title>Stochastic Car-Following Models: MA-IDM and AR(p) IDM</title>
+<meta name="description" content="Why an IDM calibration residual is not white noise, and how MA-IDM (Gaussian-process) and DR-IDM (AR(p)) driver noise differ: equations, glossary, FAQ." />
 <link rel="canonical" href="https://chengyuan-zhang.github.io/traffic-sim/models.html" />
+<meta name="author" content="Chengyuan Zhang" />
+<!-- Let search and answer engines quote this page at full length and show the
+     preview image large; without max-image-preview:large a page is ineligible
+     for the larger thumbnail treatments and for Discover. -->
+<meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1" />
+<meta name="theme-color" content="#0f1720" />
+
+<!-- Social / link-preview cards -->
+<meta property="og:type" content="article" />
+<meta property="og:site_name" content="traffic-sim" />
+<meta property="og:locale" content="en_US" />
+<meta property="og:title" content="Motivation & Models — stochastic car-following explained" />
+<meta property="og:description" content="Why plain IDM misses the interesting physics, and two Bayesian extensions that fix it." />
+<meta property="og:url" content="https://chengyuan-zhang.github.io/traffic-sim/models.html" />
+<meta property="og:image" content="https://chengyuan-zhang.github.io/traffic-sim/preview.png" />
+<meta property="og:image:type" content="image/png" />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+<meta property="og:image:alt" content="The traffic-sim ring road with vehicles coloured by speed, live traffic charts, and a time-space diagram showing stop-and-go waves." />
+<meta property="article:author" content="https://chengyuan-zhang.github.io/" />
+<meta property="article:published_time" content="2026-04-22" />
+<meta property="article:modified_time" content="2026-09-18" />
+<meta property="article:section" content="Traffic flow theory" />
+<meta property="article:tag" content="Intelligent Driver Model" />
+<meta property="article:tag" content="stochastic car-following" />
+<meta property="article:tag" content="Bayesian calibration" />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="Motivation & Models — stochastic car-following explained" />
+<meta name="twitter:description" content="Why plain IDM misses the interesting physics, and two Bayesian extensions that fix it." />
+<meta name="twitter:image" content="https://chengyuan-zhang.github.io/traffic-sim/preview.png" />
+<meta name="twitter:image:alt" content="The traffic-sim ring road with vehicles coloured by speed, live traffic charts, and a time-space diagram showing stop-and-go waves." />
+
+<!-- Icons and machine-readable site metadata. The favicon is a real file
+     rather than the data: URI this site used before, because Google only
+     shows a favicon in search results if it can crawl one at a stable URL. -->
+<link rel="icon" href="icon.svg" type="image/svg+xml" />
+<link rel="manifest" href="site.webmanifest" />
+<link rel="sitemap" type="application/xml" href="sitemap.xml" />
+<link rel="author" href="https://chengyuan-zhang.github.io/" />
+<link rel="me" href="https://github.com/Chengyuan-Zhang" />
+<link rel="me" href="https://orcid.org/0000-0001-8463-7380" />
+
 <link rel="preconnect" href="https://arxiv.org" />
 <link rel="preconnect" href="https://doi.org" />
 <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
@@ -38,6 +68,668 @@
 <script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
 <script defer src="page.js"></script>
 <script defer src="models.js"></script>
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "WebSite",
+      "@id": "https://chengyuan-zhang.github.io/traffic-sim/#website",
+      "url": "https://chengyuan-zhang.github.io/traffic-sim/",
+      "name": "traffic-sim",
+      "alternateName": "Ring-Road Traffic Simulator",
+      "description": "An interactive, dependency-free browser simulator of the Intelligent Driver Model on a ring road, with three stochastic driver-noise models from Bayesian car-following calibration research.",
+      "inLanguage": "en",
+      "author": {
+        "@id": "https://chengyuan-zhang.github.io/traffic-sim/#author"
+      },
+      "publisher": {
+        "@id": "https://chengyuan-zhang.github.io/traffic-sim/#author"
+      },
+      "copyrightHolder": {
+        "@id": "https://chengyuan-zhang.github.io/traffic-sim/#author"
+      },
+      "license": "https://opensource.org/licenses/MIT",
+      "isAccessibleForFree": true
+    },
+    {
+      "@type": "Person",
+      "@id": "https://chengyuan-zhang.github.io/traffic-sim/#author",
+      "name": "Chengyuan Zhang",
+      "givenName": "Chengyuan",
+      "familyName": "Zhang",
+      "jobTitle": "Ph.D. Candidate in Civil Engineering",
+      "url": "https://chengyuan-zhang.github.io/",
+      "identifier": "https://orcid.org/0000-0001-8463-7380",
+      "affiliation": {
+        "@type": "CollegeOrUniversity",
+        "name": "McGill University",
+        "department": {
+          "@type": "Organization",
+          "name": "Department of Civil Engineering"
+        },
+        "url": "https://www.mcgill.ca/",
+        "address": {
+          "@type": "PostalAddress",
+          "addressLocality": "Montreal",
+          "addressRegion": "QC",
+          "addressCountry": "CA"
+        }
+      },
+      "knowsAbout": [
+        "Traffic flow theory",
+        "Car-following models",
+        "Bayesian calibration",
+        "Gaussian processes",
+        "Microscopic traffic simulation"
+      ],
+      "sameAs": [
+        "https://chengyuan-zhang.github.io/",
+        "https://github.com/Chengyuan-Zhang",
+        "https://scholar.google.com/citations?user=4Zgj2BkAAAAJ&hl=en",
+        "https://orcid.org/0000-0001-8463-7380",
+        "https://www.linkedin.com/in/cy-zhang"
+      ]
+    },
+    {
+      "@type": "ImageObject",
+      "@id": "https://chengyuan-zhang.github.io/traffic-sim/#preview",
+      "url": "https://chengyuan-zhang.github.io/traffic-sim/preview.png",
+      "contentUrl": "https://chengyuan-zhang.github.io/traffic-sim/preview.png",
+      "width": 1200,
+      "height": 630,
+      "encodingFormat": "image/png",
+      "caption": "The traffic-sim ring road: vehicles coloured by speed, live flow and density charts, and a time-space diagram in which stop-and-go waves appear as backward-travelling diagonal bands."
+    },
+    {
+      "@type": "ScholarlyArticle",
+      "@id": "https://chengyuan-zhang.github.io/traffic-sim/#paper-ma-idm",
+      "name": "Bayesian Calibration of the Intelligent Driver Model",
+      "headline": "Bayesian Calibration of the Intelligent Driver Model",
+      "abstract": "Introduces MA-IDM, a memory-augmented Intelligent Driver Model in which the acceleration residual is modelled as a Gaussian process with a stationary kernel rather than as independent Gaussian error.",
+      "author": [
+        {
+          "@id": "https://chengyuan-zhang.github.io/traffic-sim/#author"
+        },
+        {
+          "@type": "Person",
+          "name": "Lijun Sun"
+        }
+      ],
+      "datePublished": "2024",
+      "pagination": "9308-9320",
+      "isPartOf": {
+        "@type": "PublicationIssue",
+        "issueNumber": "8",
+        "isPartOf": {
+          "@type": [
+            "PublicationVolume",
+            "Periodical"
+          ],
+          "volumeNumber": "25",
+          "name": "IEEE Transactions on Intelligent Transportation Systems"
+        }
+      },
+      "identifier": [
+        {
+          "@type": "PropertyValue",
+          "propertyID": "DOI",
+          "value": "10.1109/TITS.2024.3354102"
+        },
+        {
+          "@type": "PropertyValue",
+          "propertyID": "arXiv",
+          "value": "arXiv:2210.03571"
+        }
+      ],
+      "url": "https://doi.org/10.1109/TITS.2024.3354102",
+      "sameAs": [
+        "https://doi.org/10.1109/TITS.2024.3354102",
+        "https://arxiv.org/abs/2210.03571"
+      ]
+    },
+    {
+      "@type": "ScholarlyArticle",
+      "@id": "https://chengyuan-zhang.github.io/traffic-sim/#paper-dr-idm",
+      "name": "Calibrating Car-Following Models via Bayesian Dynamic Regression",
+      "headline": "Calibrating Car-Following Models via Bayesian Dynamic Regression",
+      "abstract": "Calibrates car-following models with an autoregressive AR(p) residual estimated jointly with the model parameters, letting the residual autocorrelation change sign over a memory horizon of roughly ten seconds.",
+      "author": [
+        {
+          "@id": "https://chengyuan-zhang.github.io/traffic-sim/#author"
+        },
+        {
+          "@type": "Person",
+          "name": "Wenshuo Wang"
+        },
+        {
+          "@type": "Person",
+          "name": "Lijun Sun"
+        }
+      ],
+      "datePublished": "2024",
+      "pagination": "104719",
+      "isPartOf": {
+        "@type": [
+          "PublicationVolume",
+          "Periodical"
+        ],
+        "volumeNumber": "168",
+        "name": "Transportation Research Part C: Emerging Technologies"
+      },
+      "identifier": [
+        {
+          "@type": "PropertyValue",
+          "propertyID": "DOI",
+          "value": "10.1016/j.trc.2024.104719"
+        },
+        {
+          "@type": "PropertyValue",
+          "propertyID": "arXiv",
+          "value": "arXiv:2307.03340"
+        }
+      ],
+      "url": "https://doi.org/10.1016/j.trc.2024.104719",
+      "sameAs": [
+        "https://doi.org/10.1016/j.trc.2024.104719",
+        "https://arxiv.org/abs/2307.03340"
+      ]
+    },
+    {
+      "@type": "ScholarlyArticle",
+      "@id": "https://chengyuan-zhang.github.io/traffic-sim/#paper-idm",
+      "name": "Congested traffic states in empirical observations and microscopic simulations",
+      "author": [
+        {
+          "@type": "Person",
+          "name": "Martin Treiber",
+          "sameAs": "https://mtreiber.de/"
+        },
+        {
+          "@type": "Person",
+          "name": "Ansgar Hennecke"
+        },
+        {
+          "@type": "Person",
+          "name": "Dirk Helbing"
+        }
+      ],
+      "datePublished": "2000",
+      "pagination": "1805-1824",
+      "isPartOf": {
+        "@type": "PublicationIssue",
+        "issueNumber": "2",
+        "isPartOf": {
+          "@type": [
+            "PublicationVolume",
+            "Periodical"
+          ],
+          "volumeNumber": "62",
+          "name": "Physical Review E"
+        }
+      },
+      "identifier": [
+        {
+          "@type": "PropertyValue",
+          "propertyID": "DOI",
+          "value": "10.1103/PhysRevE.62.1805"
+        }
+      ],
+      "url": "https://doi.org/10.1103/PhysRevE.62.1805",
+      "description": "The paper that introduced the Intelligent Driver Model."
+    },
+    {
+      "@type": "ScholarlyArticle",
+      "@id": "https://chengyuan-zhang.github.io/traffic-sim/#paper-sugiyama",
+      "name": "Traffic jams without bottlenecks: experimental evidence for the physical mechanism of the formation of a jam",
+      "author": [
+        {
+          "@type": "Person",
+          "name": "Yuki Sugiyama"
+        },
+        {
+          "@type": "Person",
+          "name": "Minoru Fukui"
+        },
+        {
+          "@type": "Person",
+          "name": "Macoto Kikuchi"
+        },
+        {
+          "@type": "Person",
+          "name": "Katsuya Hasebe"
+        },
+        {
+          "@type": "Person",
+          "name": "Akihiro Nakayama"
+        },
+        {
+          "@type": "Person",
+          "name": "Katsuhiro Nishinari"
+        },
+        {
+          "@type": "Person",
+          "name": "Shin-ichi Tadaki"
+        },
+        {
+          "@type": "Person",
+          "name": "Satoshi Yukawa"
+        }
+      ],
+      "datePublished": "2008",
+      "pagination": "033001",
+      "isPartOf": {
+        "@type": "PublicationIssue",
+        "issueNumber": "3",
+        "isPartOf": {
+          "@type": [
+            "PublicationVolume",
+            "Periodical"
+          ],
+          "volumeNumber": "10",
+          "name": "New Journal of Physics"
+        }
+      },
+      "identifier": [
+        {
+          "@type": "PropertyValue",
+          "propertyID": "DOI",
+          "value": "10.1088/1367-2630/10/3/033001"
+        }
+      ],
+      "url": "https://doi.org/10.1088/1367-2630/10/3/033001",
+      "description": "The circular-track experiment whose geometry the simulator presets follow."
+    },
+    {
+      "@type": "TechArticle",
+      "@id": "https://chengyuan-zhang.github.io/traffic-sim/models.html#article",
+      "url": "https://chengyuan-zhang.github.io/traffic-sim/models.html",
+      "headline": "Stochastic car-following: MA-IDM and dynamic-regression IDM",
+      "name": "Motivation & Models — stochastic car-following",
+      "description": "Why the calibration residual of a deterministic Intelligent Driver Model is not white noise, and how a Gaussian-process residual (MA-IDM) and an AR(p) residual (dynamic-regression IDM) differ in assumptions, parameters and consequences.",
+      "articleSection": [
+        "Motivation",
+        "The IDM core",
+        "MA-IDM (Gaussian-process noise)",
+        "Dynamic-regression IDM (AR(p) noise)",
+        "B-IDM (white noise)",
+        "Side by side",
+        "Glossary",
+        "FAQ"
+      ],
+      "proficiencyLevel": "Expert",
+      "dependencies": "Familiarity with car-following models and basic probability.",
+      "author": {
+        "@id": "https://chengyuan-zhang.github.io/traffic-sim/#author"
+      },
+      "publisher": {
+        "@id": "https://chengyuan-zhang.github.io/traffic-sim/#author"
+      },
+      "isPartOf": {
+        "@id": "https://chengyuan-zhang.github.io/traffic-sim/#website"
+      },
+      "about": [
+        {
+          "@type": "DefinedTerm",
+          "name": "Intelligent Driver Model",
+          "sameAs": "https://en.wikipedia.org/wiki/Intelligent_driver_model"
+        },
+        {
+          "@type": "DefinedTerm",
+          "name": "Car-following model",
+          "sameAs": "https://en.wikipedia.org/wiki/Microscopic_traffic_flow_model"
+        },
+        {
+          "@type": "DefinedTerm",
+          "name": "Traffic flow",
+          "sameAs": "https://en.wikipedia.org/wiki/Traffic_flow"
+        },
+        {
+          "@type": "DefinedTerm",
+          "name": "Traffic wave",
+          "sameAs": "https://en.wikipedia.org/wiki/Traffic_wave"
+        },
+        {
+          "@type": "DefinedTerm",
+          "name": "Gaussian process",
+          "sameAs": "https://en.wikipedia.org/wiki/Gaussian_process"
+        },
+        {
+          "@type": "DefinedTerm",
+          "name": "Autoregressive model",
+          "sameAs": "https://en.wikipedia.org/wiki/Autoregressive_model"
+        },
+        {
+          "@type": "DefinedTerm",
+          "name": "Fundamental diagram of traffic flow",
+          "sameAs": "https://en.wikipedia.org/wiki/Fundamental_diagram_of_traffic_flow"
+        }
+      ],
+      "mentions": [
+        {
+          "@type": "DefinedTerm",
+          "name": "Car-following model",
+          "description": "A microscopic traffic model that gives one vehicle’s acceleration as a function of its own speed and its relationship to the vehicle directly ahead. The IDM is one.",
+          "inDefinedTermSet": {
+            "@id": "https://chengyuan-zhang.github.io/traffic-sim/models.html#glossary"
+          },
+          "sameAs": "https://en.wikipedia.org/wiki/Microscopic_traffic_flow_model"
+        },
+        {
+          "@type": "DefinedTerm",
+          "name": "Intelligent Driver Model (IDM)",
+          "description": "The continuous, collision-free car-following model of Treiber, Hennecke and Helbing (2000), with five interpretable parameters: v₀, T, s₀, a and b.",
+          "inDefinedTermSet": {
+            "@id": "https://chengyuan-zhang.github.io/traffic-sim/models.html#glossary"
+          },
+          "sameAs": "https://en.wikipedia.org/wiki/Intelligent_driver_model"
+        },
+        {
+          "@type": "DefinedTerm",
+          "name": "Driver noise / acceleration residual",
+          "description": "The part of an observed acceleration that a fitted deterministic model does not explain, written η(t). Its standard deviation on HighD is around 0.2 m/s².",
+          "inDefinedTermSet": {
+            "@id": "https://chengyuan-zhang.github.io/traffic-sim/models.html#glossary"
+          }
+        },
+        {
+          "@type": "DefinedTerm",
+          "name": "Stop-and-go wave (phantom jam)",
+          "description": "A cluster of stopped or slow vehicles that forms with no bottleneck and travels backwards against the direction of travel, typically at around 15–20 km/h.",
+          "inDefinedTermSet": {
+            "@id": "https://chengyuan-zhang.github.io/traffic-sim/models.html#glossary"
+          },
+          "sameAs": "https://en.wikipedia.org/wiki/Traffic_wave"
+        },
+        {
+          "@type": "DefinedTerm",
+          "name": "Ring road experiment",
+          "description": "A closed circular track with a fixed number of vehicles and no entries, exits or bottlenecks — the cleanest setting in which to show that congestion needs no external cause. After Sugiyama et al. (2008).",
+          "inDefinedTermSet": {
+            "@id": "https://chengyuan-zhang.github.io/traffic-sim/models.html#glossary"
+          }
+        },
+        {
+          "@type": "DefinedTerm",
+          "name": "Gaussian process (GP)",
+          "description": "A distribution over functions in which any finite set of values is jointly Gaussian, specified by a mean and a covariance kernel. Here it supplies a residual with smooth, continuous-time memory.",
+          "inDefinedTermSet": {
+            "@id": "https://chengyuan-zhang.github.io/traffic-sim/models.html#glossary"
+          },
+          "sameAs": "https://en.wikipedia.org/wiki/Gaussian_process"
+        },
+        {
+          "@type": "DefinedTerm",
+          "name": "Kernel lengthscale ℓ",
+          "description": "The timescale of a stationary GP kernel: how far apart two instants must be before their residuals are effectively unrelated. The MA-IDM posterior mean on HighD is ℓ ≈ 1.435 s.",
+          "inDefinedTermSet": {
+            "@id": "https://chengyuan-zhang.github.io/traffic-sim/models.html#glossary"
+          }
+        },
+        {
+          "@type": "DefinedTerm",
+          "name": "AR(p) process",
+          "description": "An autoregressive process in which each value is a weighted sum of the previous p values plus an independent innovation. DR-IDM uses one on the data’s 0.2 s grid.",
+          "inDefinedTermSet": {
+            "@id": "https://chengyuan-zhang.github.io/traffic-sim/models.html#glossary"
+          },
+          "sameAs": "https://en.wikipedia.org/wiki/Autoregressive_model"
+        },
+        {
+          "@type": "DefinedTerm",
+          "name": "Autocorrelation ACF(τ)",
+          "description": "The correlation of a signal with itself at lag τ. It is the sharpest way to tell the three noise models apart: identically zero for white noise, positive and decaying for a GP, sign-changing for AR(p).",
+          "inDefinedTermSet": {
+            "@id": "https://chengyuan-zhang.github.io/traffic-sim/models.html#glossary"
+          },
+          "sameAs": "https://en.wikipedia.org/wiki/Autocorrelation"
+        },
+        {
+          "@type": "DefinedTerm",
+          "name": "Fundamental diagram",
+          "description": "The flow-versus-density relationship of a road section. Loops in a measured trajectory indicate non-stationary loading and unloading rather than a mis-measurement.",
+          "inDefinedTermSet": {
+            "@id": "https://chengyuan-zhang.github.io/traffic-sim/models.html#glossary"
+          },
+          "sameAs": "https://en.wikipedia.org/wiki/Fundamental_diagram_of_traffic_flow"
+        },
+        {
+          "@type": "DefinedTerm",
+          "name": "Time–space diagram",
+          "description": "Position plotted against time for every vehicle, with colour encoding speed. Stop-and-go waves appear as diagonal bands with a negative slope.",
+          "inDefinedTermSet": {
+            "@id": "https://chengyuan-zhang.github.io/traffic-sim/models.html#glossary"
+          }
+        },
+        {
+          "@type": "DefinedTerm",
+          "name": "Bayesian calibration",
+          "description": "Estimating a model’s parameters as a posterior distribution rather than a single best fit, which makes both parameter uncertainty and the structure of the residual part of the result.",
+          "inDefinedTermSet": {
+            "@id": "https://chengyuan-zhang.github.io/traffic-sim/models.html#glossary"
+          },
+          "sameAs": "https://en.wikipedia.org/wiki/Bayesian_inference"
+        }
+      ],
+      "image": {
+        "@id": "https://chengyuan-zhang.github.io/traffic-sim/#preview"
+      },
+      "inLanguage": "en",
+      "datePublished": "2026-04-22",
+      "dateModified": "2026-09-18",
+      "citation": [
+        {
+          "@id": "https://chengyuan-zhang.github.io/traffic-sim/#paper-ma-idm"
+        },
+        {
+          "@id": "https://chengyuan-zhang.github.io/traffic-sim/#paper-dr-idm"
+        },
+        {
+          "@id": "https://chengyuan-zhang.github.io/traffic-sim/#paper-idm"
+        },
+        {
+          "@id": "https://chengyuan-zhang.github.io/traffic-sim/#paper-sugiyama"
+        }
+      ],
+      "breadcrumb": {
+        "@id": "https://chengyuan-zhang.github.io/traffic-sim/models.html#breadcrumb"
+      },
+      "license": "https://opensource.org/licenses/MIT"
+    },
+    {
+      "@type": "DefinedTermSet",
+      "@id": "https://chengyuan-zhang.github.io/traffic-sim/models.html#glossary",
+      "name": "Stochastic car-following glossary",
+      "description": "Working definitions of the terms used across the traffic-sim pages.",
+      "inLanguage": "en",
+      "hasDefinedTerm": [
+        {
+          "@type": "DefinedTerm",
+          "name": "Car-following model",
+          "description": "A microscopic traffic model that gives one vehicle’s acceleration as a function of its own speed and its relationship to the vehicle directly ahead. The IDM is one.",
+          "inDefinedTermSet": {
+            "@id": "https://chengyuan-zhang.github.io/traffic-sim/models.html#glossary"
+          },
+          "sameAs": "https://en.wikipedia.org/wiki/Microscopic_traffic_flow_model"
+        },
+        {
+          "@type": "DefinedTerm",
+          "name": "Intelligent Driver Model (IDM)",
+          "description": "The continuous, collision-free car-following model of Treiber, Hennecke and Helbing (2000), with five interpretable parameters: v₀, T, s₀, a and b.",
+          "inDefinedTermSet": {
+            "@id": "https://chengyuan-zhang.github.io/traffic-sim/models.html#glossary"
+          },
+          "sameAs": "https://en.wikipedia.org/wiki/Intelligent_driver_model"
+        },
+        {
+          "@type": "DefinedTerm",
+          "name": "Driver noise / acceleration residual",
+          "description": "The part of an observed acceleration that a fitted deterministic model does not explain, written η(t). Its standard deviation on HighD is around 0.2 m/s².",
+          "inDefinedTermSet": {
+            "@id": "https://chengyuan-zhang.github.io/traffic-sim/models.html#glossary"
+          }
+        },
+        {
+          "@type": "DefinedTerm",
+          "name": "Stop-and-go wave (phantom jam)",
+          "description": "A cluster of stopped or slow vehicles that forms with no bottleneck and travels backwards against the direction of travel, typically at around 15–20 km/h.",
+          "inDefinedTermSet": {
+            "@id": "https://chengyuan-zhang.github.io/traffic-sim/models.html#glossary"
+          },
+          "sameAs": "https://en.wikipedia.org/wiki/Traffic_wave"
+        },
+        {
+          "@type": "DefinedTerm",
+          "name": "Ring road experiment",
+          "description": "A closed circular track with a fixed number of vehicles and no entries, exits or bottlenecks — the cleanest setting in which to show that congestion needs no external cause. After Sugiyama et al. (2008).",
+          "inDefinedTermSet": {
+            "@id": "https://chengyuan-zhang.github.io/traffic-sim/models.html#glossary"
+          }
+        },
+        {
+          "@type": "DefinedTerm",
+          "name": "Gaussian process (GP)",
+          "description": "A distribution over functions in which any finite set of values is jointly Gaussian, specified by a mean and a covariance kernel. Here it supplies a residual with smooth, continuous-time memory.",
+          "inDefinedTermSet": {
+            "@id": "https://chengyuan-zhang.github.io/traffic-sim/models.html#glossary"
+          },
+          "sameAs": "https://en.wikipedia.org/wiki/Gaussian_process"
+        },
+        {
+          "@type": "DefinedTerm",
+          "name": "Kernel lengthscale ℓ",
+          "description": "The timescale of a stationary GP kernel: how far apart two instants must be before their residuals are effectively unrelated. The MA-IDM posterior mean on HighD is ℓ ≈ 1.435 s.",
+          "inDefinedTermSet": {
+            "@id": "https://chengyuan-zhang.github.io/traffic-sim/models.html#glossary"
+          }
+        },
+        {
+          "@type": "DefinedTerm",
+          "name": "AR(p) process",
+          "description": "An autoregressive process in which each value is a weighted sum of the previous p values plus an independent innovation. DR-IDM uses one on the data’s 0.2 s grid.",
+          "inDefinedTermSet": {
+            "@id": "https://chengyuan-zhang.github.io/traffic-sim/models.html#glossary"
+          },
+          "sameAs": "https://en.wikipedia.org/wiki/Autoregressive_model"
+        },
+        {
+          "@type": "DefinedTerm",
+          "name": "Autocorrelation ACF(τ)",
+          "description": "The correlation of a signal with itself at lag τ. It is the sharpest way to tell the three noise models apart: identically zero for white noise, positive and decaying for a GP, sign-changing for AR(p).",
+          "inDefinedTermSet": {
+            "@id": "https://chengyuan-zhang.github.io/traffic-sim/models.html#glossary"
+          },
+          "sameAs": "https://en.wikipedia.org/wiki/Autocorrelation"
+        },
+        {
+          "@type": "DefinedTerm",
+          "name": "Fundamental diagram",
+          "description": "The flow-versus-density relationship of a road section. Loops in a measured trajectory indicate non-stationary loading and unloading rather than a mis-measurement.",
+          "inDefinedTermSet": {
+            "@id": "https://chengyuan-zhang.github.io/traffic-sim/models.html#glossary"
+          },
+          "sameAs": "https://en.wikipedia.org/wiki/Fundamental_diagram_of_traffic_flow"
+        },
+        {
+          "@type": "DefinedTerm",
+          "name": "Time–space diagram",
+          "description": "Position plotted against time for every vehicle, with colour encoding speed. Stop-and-go waves appear as diagonal bands with a negative slope.",
+          "inDefinedTermSet": {
+            "@id": "https://chengyuan-zhang.github.io/traffic-sim/models.html#glossary"
+          }
+        },
+        {
+          "@type": "DefinedTerm",
+          "name": "Bayesian calibration",
+          "description": "Estimating a model’s parameters as a posterior distribution rather than a single best fit, which makes both parameter uncertainty and the structure of the residual part of the result.",
+          "inDefinedTermSet": {
+            "@id": "https://chengyuan-zhang.github.io/traffic-sim/models.html#glossary"
+          },
+          "sameAs": "https://en.wikipedia.org/wiki/Bayesian_inference"
+        }
+      ]
+    },
+    {
+      "@type": "BreadcrumbList",
+      "@id": "https://chengyuan-zhang.github.io/traffic-sim/models.html#breadcrumb",
+      "itemListElement": [
+        {
+          "@type": "ListItem",
+          "position": 1,
+          "name": "traffic-sim",
+          "item": "https://chengyuan-zhang.github.io/traffic-sim/"
+        },
+        {
+          "@type": "ListItem",
+          "position": 2,
+          "name": "Motivation & models",
+          "item": "https://chengyuan-zhang.github.io/traffic-sim/models.html"
+        }
+      ]
+    },
+    {
+      "@type": "FAQPage",
+      "@id": "https://chengyuan-zhang.github.io/traffic-sim/models.html#faq",
+      "url": "https://chengyuan-zhang.github.io/traffic-sim/models.html#faq",
+      "inLanguage": "en",
+      "isPartOf": {
+        "@id": "https://chengyuan-zhang.github.io/traffic-sim/#website"
+      },
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "name": "Why is a calibrated car-following residual not white noise?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Because the things the model leaves out are themselves persistent. A deterministic car-following model has no representation of distraction, of a driver’s momentary aggressiveness, of anticipation beyond the immediate leader, or of anything happening in the next lane — and none of those switch on and off from one video frame to the next. Fitting the IDM to HighD trajectories leaves a residual with a standard deviation near 0.2 m/s² whose autocorrelation decays over several seconds: about 5 s under the MA-IDM Gaussian-process fit, and out to roughly 10 s under the AR(p) calibration."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "What does MA-IDM add to the Intelligent Driver Model?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "MA-IDM, the memory-augmented IDM of Zhang & Sun (2024), keeps the IDM acceleration unchanged and replaces the independent Gaussian error term of a standard Bayesian calibration with a Gaussian process over time. The residual then has a covariance kernel instead of a single variance, so two free numbers describe the driver’s memory: a marginal scale and a lengthscale. Calibrated on HighD the lengthscale is about 1.435 s, meaning the residual stays informative for roughly three lengthscales, or about 5 s."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "What does the dynamic-regression IDM (DR-IDM) do differently?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "DR-IDM, from Zhang, Wang & Sun (2024), models the residual as an autoregressive process on a fixed time grid: each value is a weighted sum of the previous p values plus a fresh innovation. That is a discrete-time relative of the Gaussian-process view, and it buys two things — the coefficients are cheap to infer jointly with the IDM parameters, and the fitted autocorrelation is allowed to go negative at longer lags, which the simple stationary kernels cannot do. The paper recommends an order of about 4 to 6."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Which noise model should I use?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "For a smooth, physically interpretable memory with two parameters, use the Gaussian process — the lengthscale is directly readable as a memory horizon. For a residual whose autocorrelation changes sign, or when you want the noise to live on the same discrete grid as your data, use AR(p) at order 4 to 6. Use white noise only as a baseline: it is what a standard Bayesian calibration assumes, and seeing how much it under-predicts jam formation is the point of keeping it available."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Does adding driver noise change the traffic jams, or only the picture?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "It changes the outcome, not just the appearance. Noise seeds the instability that a perfectly uniform deterministic ring would never develop on its own, and the temporal correlation of that noise sets how efficiently it seeds it. The same total variance arranged as high-frequency jitter is largely averaged away by the car-following chain, while the same variance concentrated at low frequencies falls into the band the chain amplifies, producing earlier and deeper stop-and-go waves."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "What is a fundamental diagram?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "A fundamental diagram is the relationship between traffic flow, in vehicles per hour, and traffic density, in vehicles per kilometre, on a stretch of road. It rises roughly linearly in free flow, peaks at a capacity point, then falls again as congestion sets in. Because a jammed ring is not in a steady state, a measured trajectory through this plane forms loops rather than tracing a single curve, and those loops are the signature of loading and unloading as a wave passes the measurement arc."
+          }
+        }
+      ]
+    }
+  ]
+}
+</script>
 </head>
 <body>
   <a class="skip-link" href="#main-content">Skip to main content</a>
@@ -152,8 +844,27 @@
 
     <!-- ============================================================ -->
     <!-- 1. Motivation                                                 -->
+    <!-- A table of contents earns its keep three times over on a page this
+         long: readers jump, internal links point at named anchors, and search
+         engines have somewhere to hang "jump to section" links. -->
+    <nav class="mdl-toc" aria-labelledby="toc-title">
+      <h2 id="toc-title">On this page</h2>
+      <ol>
+        <li><a href="#motivation">Motivation — why stochastic car-following?</a></li>
+        <li><a href="#idm">Background — the IDM core</a></li>
+        <li><a href="#ma-idm">MA-IDM — Memory-Augmented IDM</a></li>
+        <li><a href="#dr-idm">Dynamic-regression IDM — AR(p) noise</a></li>
+        <li><a href="#b-idm">Baseline — B-IDM (white noise)</a></li>
+        <li><a href="#side-by-side">Side by side</a></li>
+        <li><a href="#glossary">Glossary</a></li>
+        <li><a href="#faq">Frequently asked questions</a></li>
+        <li><a href="#try-it">Try it out</a></li>
+        <li><a href="#citation">Citation</a></li>
+      </ol>
+    </nav>
+
     <!-- ============================================================ -->
-    <div class="mdl-sec-title">
+    <div class="mdl-sec-title" id="motivation">
       <span class="num">01</span>
       <h2>Motivation — why stochastic car-following?</h2>
     </div>
@@ -197,7 +908,7 @@
     <!-- ============================================================ -->
     <!-- 2. IDM core                                                   -->
     <!-- ============================================================ -->
-    <div class="mdl-sec-title">
+    <div class="mdl-sec-title" id="idm">
       <span class="num">02</span>
       <h2>Background — the IDM core</h2>
     </div>
@@ -248,7 +959,7 @@
     <!-- ============================================================ -->
     <!-- 3. MA-IDM                                                     -->
     <!-- ============================================================ -->
-    <div class="mdl-sec-title">
+    <div class="mdl-sec-title" id="ma-idm">
       <span class="num">03</span>
       <h2>MA-IDM — Memory-Augmented IDM</h2>
     </div>
@@ -326,7 +1037,7 @@
     <!-- ============================================================ -->
     <!-- 4. DR-IDM                                                     -->
     <!-- ============================================================ -->
-    <div class="mdl-sec-title">
+    <div class="mdl-sec-title" id="dr-idm">
       <span class="num">04</span>
       <h2>Dynamic-regression IDM — AR(p) noise</h2>
     </div>
@@ -411,7 +1122,7 @@
     <!-- ============================================================ -->
     <!-- 5. Baseline                                                   -->
     <!-- ============================================================ -->
-    <div class="mdl-sec-title">
+    <div class="mdl-sec-title" id="b-idm">
       <span class="num">05</span>
       <h2>Baseline — B-IDM (white noise)</h2>
     </div>
@@ -456,7 +1167,7 @@
     <!-- ============================================================ -->
     <!-- 6. Summary comparison                                         -->
     <!-- ============================================================ -->
-    <div class="mdl-sec-title">
+    <div class="mdl-sec-title" id="side-by-side">
       <span class="num">06</span>
       <h2>Side by side</h2>
     </div>
@@ -515,10 +1226,109 @@
     </div>
 
     <!-- ============================================================ -->
+    <!-- Glossary                                                      -->
+    <!-- ============================================================ -->
+    <div class="mdl-sec-title" id="glossary">
+      <span class="num">07</span>
+      <h2>Glossary</h2>
+    </div>
+
+    <p>
+      Working definitions of the terms used across these pages, in the sense
+      they carry here.
+    </p>
+
+    <dl class="mdl-glossary">
+      <div class="mdl-gl-item">
+        <dt><a href="https://en.wikipedia.org/wiki/Microscopic_traffic_flow_model" target="_blank" rel="noopener noreferrer">Car-following model</a></dt>
+        <dd>A microscopic traffic model that gives one vehicle’s acceleration as a function of its own speed and its relationship to the vehicle directly ahead. The IDM is one.</dd>
+      </div>
+      <div class="mdl-gl-item">
+        <dt><a href="https://en.wikipedia.org/wiki/Intelligent_driver_model" target="_blank" rel="noopener noreferrer">Intelligent Driver Model (IDM)</a></dt>
+        <dd>The continuous, collision-free car-following model of Treiber, Hennecke and Helbing (2000), with five interpretable parameters: v₀, T, s₀, a and b.</dd>
+      </div>
+      <div class="mdl-gl-item">
+        <dt>Driver noise / acceleration residual</dt>
+        <dd>The part of an observed acceleration that a fitted deterministic model does not explain, written η(t). Its standard deviation on HighD is around 0.2 m/s².</dd>
+      </div>
+      <div class="mdl-gl-item">
+        <dt><a href="https://en.wikipedia.org/wiki/Traffic_wave" target="_blank" rel="noopener noreferrer">Stop-and-go wave (phantom jam)</a></dt>
+        <dd>A cluster of stopped or slow vehicles that forms with no bottleneck and travels backwards against the direction of travel, typically at around 15–20 km/h.</dd>
+      </div>
+      <div class="mdl-gl-item">
+        <dt>Ring road experiment</dt>
+        <dd>A closed circular track with a fixed number of vehicles and no entries, exits or bottlenecks — the cleanest setting in which to show that congestion needs no external cause. After Sugiyama et al. (2008).</dd>
+      </div>
+      <div class="mdl-gl-item">
+        <dt><a href="https://en.wikipedia.org/wiki/Gaussian_process" target="_blank" rel="noopener noreferrer">Gaussian process (GP)</a></dt>
+        <dd>A distribution over functions in which any finite set of values is jointly Gaussian, specified by a mean and a covariance kernel. Here it supplies a residual with smooth, continuous-time memory.</dd>
+      </div>
+      <div class="mdl-gl-item">
+        <dt>Kernel lengthscale ℓ</dt>
+        <dd>The timescale of a stationary GP kernel: how far apart two instants must be before their residuals are effectively unrelated. The MA-IDM posterior mean on HighD is ℓ ≈ 1.435 s.</dd>
+      </div>
+      <div class="mdl-gl-item">
+        <dt><a href="https://en.wikipedia.org/wiki/Autoregressive_model" target="_blank" rel="noopener noreferrer">AR(p) process</a></dt>
+        <dd>An autoregressive process in which each value is a weighted sum of the previous p values plus an independent innovation. DR-IDM uses one on the data’s 0.2 s grid.</dd>
+      </div>
+      <div class="mdl-gl-item">
+        <dt><a href="https://en.wikipedia.org/wiki/Autocorrelation" target="_blank" rel="noopener noreferrer">Autocorrelation ACF(τ)</a></dt>
+        <dd>The correlation of a signal with itself at lag τ. It is the sharpest way to tell the three noise models apart: identically zero for white noise, positive and decaying for a GP, sign-changing for AR(p).</dd>
+      </div>
+      <div class="mdl-gl-item">
+        <dt><a href="https://en.wikipedia.org/wiki/Fundamental_diagram_of_traffic_flow" target="_blank" rel="noopener noreferrer">Fundamental diagram</a></dt>
+        <dd>The flow-versus-density relationship of a road section. Loops in a measured trajectory indicate non-stationary loading and unloading rather than a mis-measurement.</dd>
+      </div>
+      <div class="mdl-gl-item">
+        <dt>Time–space diagram</dt>
+        <dd>Position plotted against time for every vehicle, with colour encoding speed. Stop-and-go waves appear as diagonal bands with a negative slope.</dd>
+      </div>
+      <div class="mdl-gl-item">
+        <dt><a href="https://en.wikipedia.org/wiki/Bayesian_inference" target="_blank" rel="noopener noreferrer">Bayesian calibration</a></dt>
+        <dd>Estimating a model’s parameters as a posterior distribution rather than a single best fit, which makes both parameter uncertainty and the structure of the residual part of the result.</dd>
+      </div>
+    </dl>
+
+    <!-- ============================================================ -->
+    <!-- FAQ                                                           -->
+    <!-- ============================================================ -->
+    <div class="mdl-sec-title" id="faq">
+      <span class="num">08</span>
+      <h2>Frequently asked questions</h2>
+    </div>
+
+    <div class="mdl-faq">
+      <article class="mdl-faq-item">
+        <h3>Why is a calibrated car-following residual not white noise?</h3>
+        <p>Because the things the model leaves out are themselves persistent. A deterministic car-following model has no representation of distraction, of a driver’s momentary aggressiveness, of anticipation beyond the immediate leader, or of anything happening in the next lane — and none of those switch on and off from one video frame to the next. Fitting the IDM to HighD trajectories leaves a residual with a standard deviation near 0.2 m/s² whose autocorrelation decays over several seconds: about 5 s under the MA-IDM Gaussian-process fit, and out to roughly 10 s under the AR(p) calibration.</p>
+      </article>
+      <article class="mdl-faq-item">
+        <h3>What does MA-IDM add to the Intelligent Driver Model?</h3>
+        <p>MA-IDM, the memory-augmented IDM of Zhang &amp; Sun (2024), keeps the IDM acceleration unchanged and replaces the independent Gaussian error term of a standard Bayesian calibration with a Gaussian process over time. The residual then has a covariance kernel instead of a single variance, so two free numbers describe the driver’s memory: a marginal scale and a lengthscale. Calibrated on HighD the lengthscale is about 1.435 s, meaning the residual stays informative for roughly three lengthscales, or about 5 s.</p>
+      </article>
+      <article class="mdl-faq-item">
+        <h3>What does the dynamic-regression IDM (DR-IDM) do differently?</h3>
+        <p>DR-IDM, from Zhang, Wang &amp; Sun (2024), models the residual as an autoregressive process on a fixed time grid: each value is a weighted sum of the previous p values plus a fresh innovation. That is a discrete-time relative of the Gaussian-process view, and it buys two things — the coefficients are cheap to infer jointly with the IDM parameters, and the fitted autocorrelation is allowed to go negative at longer lags, which the simple stationary kernels cannot do. The paper recommends an order of about 4 to 6.</p>
+      </article>
+      <article class="mdl-faq-item">
+        <h3>Which noise model should I use?</h3>
+        <p>For a smooth, physically interpretable memory with two parameters, use the Gaussian process — the lengthscale is directly readable as a memory horizon. For a residual whose autocorrelation changes sign, or when you want the noise to live on the same discrete grid as your data, use AR(p) at order 4 to 6. Use white noise only as a baseline: it is what a standard Bayesian calibration assumes, and seeing how much it under-predicts jam formation is the point of keeping it available.</p>
+      </article>
+      <article class="mdl-faq-item">
+        <h3>Does adding driver noise change the traffic jams, or only the picture?</h3>
+        <p>It changes the outcome, not just the appearance. Noise seeds the instability that a perfectly uniform deterministic ring would never develop on its own, and the temporal correlation of that noise sets how efficiently it seeds it. The same total variance arranged as high-frequency jitter is largely averaged away by the car-following chain, while the same variance concentrated at low frequencies falls into the band the chain amplifies, producing earlier and deeper stop-and-go waves.</p>
+      </article>
+      <article class="mdl-faq-item">
+        <h3>What is a fundamental diagram?</h3>
+        <p>A fundamental diagram is the relationship between traffic flow, in vehicles per hour, and traffic density, in vehicles per kilometre, on a stretch of road. It rises roughly linearly in free flow, peaks at a capacity point, then falls again as congestion sets in. Because a jammed ring is not in a steady state, a measured trajectory through this plane forms loops rather than tracing a single curve, and those loops are the signature of loading and unloading as a wave passes the measurement arc.</p>
+      </article>
+    </div>
+
+    <!-- ============================================================ -->
     <!-- 7. CTA                                                        -->
     <!-- ============================================================ -->
-    <div class="mdl-sec-title">
-      <span class="num">07</span>
+    <div class="mdl-sec-title" id="try-it">
+      <span class="num">09</span>
       <h2>Try it out</h2>
     </div>
 
@@ -548,8 +1358,8 @@
     <!-- ============================================================ -->
     <!-- 8. Citation                                                   -->
     <!-- ============================================================ -->
-    <div class="mdl-sec-title">
-      <span class="num">08</span>
+    <div class="mdl-sec-title" id="citation">
+      <span class="num">10</span>
       <h2>Citation</h2>
     </div>
 
@@ -593,7 +1403,8 @@
   </main>
 
   <footer>
-    <p>Source on <a href="https://github.com/Chengyuan-Zhang/traffic-sim" target="_blank" rel="noopener noreferrer">GitHub</a>.</p>
+    <p>Source on <a href="https://github.com/Chengyuan-Zhang/traffic-sim" target="_blank" rel="noopener noreferrer">GitHub</a>
+       · MIT licence · updated <time datetime="2026-09-18">18 September 2026</time></p>
     <p class="tribute-small">
       With gratitude to <strong>Dr. <a href="https://mtreiber.de/" target="_blank" rel="noopener noreferrer">Martin Treiber</a></strong> —
       inventor of the IDM and pioneer of stochastic car-following — whose research, and whose

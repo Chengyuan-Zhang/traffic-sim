@@ -1,0 +1,79 @@
+# robots.txt for traffic-sim — https://chengyuan-zhang.github.io/traffic-sim/
+#
+# SCOPE CAVEAT. This site is a GitHub Pages *project* page, so it is served
+# from a sub-path of chengyuan-zhang.github.io. Crawlers only read robots.txt
+# from the origin root, i.e. https://chengyuan-zhang.github.io/robots.txt,
+# which is owned by the `chengyuan-zhang.github.io` user-site repository —
+# not by this one. This file therefore does two jobs:
+#
+#   1. it is the authoritative, version-controlled statement of the crawl
+#      policy for this project, to be mirrored into the user-site repo; and
+#   2. it becomes live as-is the moment traffic-sim moves to its own domain.
+#
+# Nothing here is private and there is nothing to ration: the site is a
+# teaching demo whose whole purpose is to be read, by people and by answer
+# engines alike. The policy is "allow everything".
+
+User-agent: *
+Allow: /
+
+# ---------------------------------------------------------------------------
+# AI / answer-engine crawlers, named explicitly.
+#
+# `User-agent: *` above already permits these, and robots.txt group matching
+# means only the MOST SPECIFIC matching group applies to a given agent. Naming
+# them is therefore not a functional change today; it is a durable, explicit
+# opt-in, so that a future restrictive rule under `*` cannot silently withdraw
+# these engines' access without someone editing the lines that say so.
+#
+# Note that Google-Extended and Applebot-Extended are not crawlers at all —
+# they are control tokens for AI training and grounding. Allowing them is what
+# permits Gemini and Apple Intelligence to use this content in answers.
+# ---------------------------------------------------------------------------
+
+# OpenAI
+User-agent: GPTBot
+User-agent: OAI-SearchBot
+User-agent: ChatGPT-User
+Allow: /
+
+# Anthropic
+User-agent: ClaudeBot
+User-agent: Claude-SearchBot
+User-agent: Claude-User
+Allow: /
+
+# Google (Gemini grounding / AI Overviews)
+User-agent: Google-Extended
+Allow: /
+
+# Apple Intelligence
+User-agent: Applebot
+User-agent: Applebot-Extended
+Allow: /
+
+# Perplexity
+User-agent: PerplexityBot
+User-agent: Perplexity-User
+Allow: /
+
+# Microsoft Copilot / Bing
+User-agent: bingbot
+Allow: /
+
+# Meta AI
+User-agent: meta-externalagent
+Allow: /
+
+# Others that surface content in generative answers or feed open corpora
+User-agent: CCBot
+User-agent: Amazonbot
+User-agent: MistralAI-User
+User-agent: cohere-ai
+User-agent: DuckAssistBot
+User-agent: YouBot
+User-agent: Diffbot
+User-agent: AI2Bot
+Allow: /
+
+Sitemap: https://chengyuan-zhang.github.io/traffic-sim/sitemap.xml

@@ -479,3 +479,120 @@ mjx-container { overflow-x: auto; overflow-y: hidden; max-width: 100%; }
   .mdl-hero { break-inside: avoid; }
   .mdl-paper { break-inside: avoid; }
 }
+
+/* ---------- Table of contents ----------
+   Long-form pages need one for readers; it also gives search engines named
+   anchors to hang "jump to section" links on, and gives other pages
+   something specific to link to than the page as a whole. */
+.mdl-toc {
+  margin: 24px 0 8px;
+  padding: 14px 18px 16px;
+  background: #0f1a28;
+  border: 1px solid #243140;
+  border-radius: 10px;
+}
+.mdl-toc h2 {
+  margin: 0 0 8px;
+  font-size: 0.72rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+  font-weight: 600;
+}
+.mdl-toc ol {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: toc;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 4px 18px;
+}
+.mdl-toc li { counter-increment: toc; }
+.mdl-toc li a {
+  display: block;
+  padding: 3px 0;
+  font-size: 0.88rem;
+  color: var(--accent);
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+}
+.mdl-toc li a::before {
+  content: counter(toc, decimal-leading-zero) "  ";
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.78em;
+}
+.mdl-toc li a:hover {
+  color: #b3e5fc;
+  border-bottom-color: #243140;
+}
+
+/* ---------- Glossary ----------
+   A definition list, marked up as one, and mirrored in the page's
+   DefinedTermSet JSON-LD so each term is a resolvable entity rather than
+   a string in a paragraph. */
+.mdl-glossary {
+  margin: 4px 0 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 12px;
+}
+.mdl-gl-item {
+  background: #121d2b;
+  border: 1px solid #243140;
+  border-radius: 9px;
+  padding: 12px 15px 13px;
+  min-width: 0;
+}
+.mdl-glossary dt {
+  margin: 0 0 4px;
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: var(--text);
+}
+.mdl-glossary dt a {
+  color: var(--text);
+  text-decoration: none;
+  border-bottom: 1px dotted #3a4b60;
+}
+.mdl-glossary dt a:hover { color: var(--accent); border-bottom-color: var(--accent); }
+.mdl-glossary dd {
+  margin: 0;
+  font-size: 0.88rem;
+  line-height: 1.55;
+  color: var(--muted-body);
+}
+
+/* ---------- FAQ ---------- */
+.mdl-faq {
+  margin: 4px 0 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  gap: 14px;
+}
+.mdl-faq-item {
+  background: #121d2b;
+  border: 1px solid #243140;
+  border-radius: 10px;
+  padding: 14px 17px 16px;
+  min-width: 0;
+}
+.mdl-faq-item h3 {
+  margin: 0 0 6px;
+  font-size: 0.95rem;
+  line-height: 1.35;
+  color: var(--accent);
+}
+.mdl-faq-item p {
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.6;
+  color: var(--muted-body);
+}
+
+@media (max-width: 720px) {
+  .mdl-toc ol,
+  .mdl-glossary,
+  .mdl-faq { grid-template-columns: 1fr; }
+}

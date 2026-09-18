@@ -1,0 +1,132 @@
+# Citation File Format 1.2.0 — https://citation-file-format.github.io/
+#
+# GitHub reads this file and renders a "Cite this repository" button, and Zenodo,
+# Software Heritage and several reference managers parse it directly. It is the
+# machine-readable twin of the Citation section in README.md: if one changes,
+# change the other.
+#
+# `preferred-citation` points at the MA-IDM paper because that is the work a
+# reader of this simulator should cite first; the dynamic-regression paper and
+# the two foundational papers follow under `references`.
+
+cff-version: 1.2.0
+message: >-
+  If you use this simulator in your work, please cite the underlying papers
+  listed below rather than the software alone.
+title: "traffic-sim: an interactive ring-road simulator for stochastic car-following models"
+abstract: >-
+  A dependency-free browser simulator of the Intelligent Driver Model on a
+  one-lane ring road, with three interchangeable stochastic driver-noise models —
+  a Gaussian process (MA-IDM), an autoregressive AR(p) process
+  (dynamic-regression IDM) and i.i.d. white noise (B-IDM) — drawn from published
+  Bayesian car-following calibration research. It shows how the temporal
+  correlation of the acceleration residual, not only its variance, governs the
+  formation of stop-and-go waves in the absence of any bottleneck.
+type: software
+authors:
+  - family-names: Zhang
+    given-names: Chengyuan
+    email: enzozcy@gmail.com
+    orcid: "https://orcid.org/0000-0001-8463-7380"
+    affiliation: "Department of Civil Engineering, McGill University, Montreal, Canada"
+repository-code: "https://github.com/Chengyuan-Zhang/traffic-sim"
+url: "https://chengyuan-zhang.github.io/traffic-sim/"
+license: MIT
+keywords:
+  - traffic simulation
+  - microscopic traffic simulation
+  - intelligent driver model
+  - IDM
+  - car-following model
+  - stochastic car-following
+  - Bayesian calibration
+  - Gaussian process
+  - autoregressive model
+  - ring road
+  - stop-and-go waves
+  - phantom traffic jam
+  - traffic flow theory
+  - fundamental diagram
+  - MA-IDM
+
+preferred-citation:
+  type: article
+  title: "Bayesian Calibration of the Intelligent Driver Model"
+  authors:
+    - family-names: Zhang
+      given-names: Chengyuan
+      orcid: "https://orcid.org/0000-0001-8463-7380"
+    - family-names: Sun
+      given-names: Lijun
+  journal: "IEEE Transactions on Intelligent Transportation Systems"
+  volume: 25
+  issue: 8
+  start: 9308
+  end: 9320
+  year: 2024
+  doi: "10.1109/TITS.2024.3354102"
+  url: "https://arxiv.org/abs/2210.03571"
+
+references:
+  - type: article
+    title: "Calibrating Car-Following Models via Bayesian Dynamic Regression"
+    authors:
+      - family-names: Zhang
+        given-names: Chengyuan
+        orcid: "https://orcid.org/0000-0001-8463-7380"
+      - family-names: Wang
+        given-names: Wenshuo
+      - family-names: Sun
+        given-names: Lijun
+    journal: "Transportation Research Part C: Emerging Technologies"
+    volume: 168
+    start: 104719
+    year: 2024
+    doi: "10.1016/j.trc.2024.104719"
+    url: "https://arxiv.org/abs/2307.03340"
+    notes: "Presented at ISTTT25."
+  - type: article
+    title: "Congested traffic states in empirical observations and microscopic simulations"
+    authors:
+      - family-names: Treiber
+        given-names: Martin
+      - family-names: Hennecke
+        given-names: Ansgar
+      - family-names: Helbing
+        given-names: Dirk
+    journal: "Physical Review E"
+    volume: 62
+    issue: 2
+    start: 1805
+    end: 1824
+    year: 2000
+    doi: "10.1103/PhysRevE.62.1805"
+    notes: "The original Intelligent Driver Model."
+  - type: article
+    title: >-
+      Traffic jams without bottlenecks: experimental evidence for the physical
+      mechanism of the formation of a jam
+    authors:
+      - family-names: Sugiyama
+        given-names: Yuki
+      - family-names: Fukui
+        given-names: Minoru
+      - family-names: Kikuchi
+        given-names: Macoto
+      - family-names: Hasebe
+        given-names: Katsuya
+      - family-names: Nakayama
+        given-names: Akihiro
+      - family-names: Nishinari
+        given-names: Katsuhiro
+      - family-names: Tadaki
+        given-names: Shin-ichi
+      - family-names: Yukawa
+        given-names: Satoshi
+    journal: "New Journal of Physics"
+    volume: 10
+    issue: 3
+    start: 33001
+    year: 2008
+    doi: "10.1088/1367-2630/10/3/033001"
+    notes: "The ring-road experiment the simulator's presets follow."

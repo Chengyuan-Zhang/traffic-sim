@@ -3,26 +3,616 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-<title>Ring-Road Traffic Simulation</title>
-<meta name="description" content="Interactive browser simulation of the Intelligent Driver Model on a ring road, with three stochastic driver-noise models (Gaussian process, AR(p), white) from recent Bayesian car-following calibration research." />
-<meta name="author" content="Chengyuan Zhang" />
-<meta name="theme-color" content="#0f1720" />
-<meta property="og:type" content="website" />
-<meta property="og:title" content="Ring-Road Traffic Simulation" />
-<meta property="og:description" content="Stop-and-go waves from three stochastic car-following models, in your browser." />
-<meta property="og:image" content="https://chengyuan-zhang.github.io/traffic-sim/preview.png" />
-<meta property="og:url" content="https://chengyuan-zhang.github.io/traffic-sim/" />
-<meta name="twitter:card" content="summary_large_image" />
-<meta name="twitter:title" content="Ring-Road Traffic Simulation" />
-<meta name="twitter:description" content="Stop-and-go waves from three stochastic car-following models, in your browser." />
-<meta name="twitter:image" content="https://chengyuan-zhang.github.io/traffic-sim/preview.png" />
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='22' fill='none' stroke='%234fc3f7' stroke-width='8'/%3E%3Ccircle cx='32' cy='10' r='5' fill='%23ffb74d'/%3E%3Ccircle cx='54' cy='32' r='5' fill='%2381c784'/%3E%3C/svg%3E" />
+<title>Ring-Road Traffic Simulator — Stochastic IDM Car-Following</title>
+<meta name="description" content="Interactive simulator of phantom traffic jams: the Intelligent Driver Model on a ring road with Gaussian-process, AR(p) or white driver noise. Free, in-browser." />
 <link rel="canonical" href="https://chengyuan-zhang.github.io/traffic-sim/" />
+<meta name="author" content="Chengyuan Zhang" />
+<!-- Let search and answer engines quote this page at full length and show the
+     preview image large; without max-image-preview:large a page is ineligible
+     for the larger thumbnail treatments and for Discover. -->
+<meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1" />
+<meta name="theme-color" content="#0f1720" />
+
+<!-- Social / link-preview cards -->
+<meta property="og:type" content="website" />
+<meta property="og:site_name" content="traffic-sim" />
+<meta property="og:locale" content="en_US" />
+<meta property="og:title" content="Ring-Road Traffic Simulator — Stochastic IDM Car-Following" />
+<meta property="og:description" content="Watch stop-and-go waves form from nothing. Three stochastic car-following models, side by side, in your browser." />
+<meta property="og:url" content="https://chengyuan-zhang.github.io/traffic-sim/" />
+<meta property="og:image" content="https://chengyuan-zhang.github.io/traffic-sim/preview.png" />
+<meta property="og:image:type" content="image/png" />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+<meta property="og:image:alt" content="The traffic-sim ring road with vehicles coloured by speed, live traffic charts, and a time-space diagram showing stop-and-go waves." />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="Ring-Road Traffic Simulator — Stochastic IDM Car-Following" />
+<meta name="twitter:description" content="Watch stop-and-go waves form from nothing. Three stochastic car-following models, side by side, in your browser." />
+<meta name="twitter:image" content="https://chengyuan-zhang.github.io/traffic-sim/preview.png" />
+<meta name="twitter:image:alt" content="The traffic-sim ring road with vehicles coloured by speed, live traffic charts, and a time-space diagram showing stop-and-go waves." />
+
+<!-- Icons and machine-readable site metadata. The favicon is a real file
+     rather than the data: URI this site used before, because Google only
+     shows a favicon in search results if it can crawl one at a stable URL. -->
+<link rel="icon" href="icon.svg" type="image/svg+xml" />
+<link rel="manifest" href="site.webmanifest" />
+<link rel="sitemap" type="application/xml" href="sitemap.xml" />
+<link rel="author" href="https://chengyuan-zhang.github.io/" />
+<link rel="me" href="https://github.com/Chengyuan-Zhang" />
+<link rel="me" href="https://orcid.org/0000-0001-8463-7380" />
+
 <link rel="preconnect" href="https://arxiv.org" />
 <link rel="preconnect" href="https://doi.org" />
 <link rel="stylesheet" href="styles.css" />
 <script src="page.js" defer></script>
 <script src="simulation.js" defer></script>
+
+<!-- Structured data. One @graph so the page, the software, the author and the
+     four cited papers are separate linked entities rather than a flat blob;
+     the FAQ and HowTo nodes mirror the visible sections further down, word for
+     word, which is the condition under which they may be published at all. -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "WebSite",
+      "@id": "https://chengyuan-zhang.github.io/traffic-sim/#website",
+      "url": "https://chengyuan-zhang.github.io/traffic-sim/",
+      "name": "traffic-sim",
+      "alternateName": "Ring-Road Traffic Simulator",
+      "description": "An interactive, dependency-free browser simulator of the Intelligent Driver Model on a ring road, with three stochastic driver-noise models from Bayesian car-following calibration research.",
+      "inLanguage": "en",
+      "author": {
+        "@id": "https://chengyuan-zhang.github.io/traffic-sim/#author"
+      },
+      "publisher": {
+        "@id": "https://chengyuan-zhang.github.io/traffic-sim/#author"
+      },
+      "copyrightHolder": {
+        "@id": "https://chengyuan-zhang.github.io/traffic-sim/#author"
+      },
+      "license": "https://opensource.org/licenses/MIT",
+      "isAccessibleForFree": true
+    },
+    {
+      "@type": "Person",
+      "@id": "https://chengyuan-zhang.github.io/traffic-sim/#author",
+      "name": "Chengyuan Zhang",
+      "givenName": "Chengyuan",
+      "familyName": "Zhang",
+      "jobTitle": "Ph.D. Candidate in Civil Engineering",
+      "url": "https://chengyuan-zhang.github.io/",
+      "identifier": "https://orcid.org/0000-0001-8463-7380",
+      "affiliation": {
+        "@type": "CollegeOrUniversity",
+        "name": "McGill University",
+        "department": {
+          "@type": "Organization",
+          "name": "Department of Civil Engineering"
+        },
+        "url": "https://www.mcgill.ca/",
+        "address": {
+          "@type": "PostalAddress",
+          "addressLocality": "Montreal",
+          "addressRegion": "QC",
+          "addressCountry": "CA"
+        }
+      },
+      "knowsAbout": [
+        "Traffic flow theory",
+        "Car-following models",
+        "Bayesian calibration",
+        "Gaussian processes",
+        "Microscopic traffic simulation"
+      ],
+      "sameAs": [
+        "https://chengyuan-zhang.github.io/",
+        "https://github.com/Chengyuan-Zhang",
+        "https://scholar.google.com/citations?user=4Zgj2BkAAAAJ&hl=en",
+        "https://orcid.org/0000-0001-8463-7380",
+        "https://www.linkedin.com/in/cy-zhang"
+      ]
+    },
+    {
+      "@type": "ImageObject",
+      "@id": "https://chengyuan-zhang.github.io/traffic-sim/#preview",
+      "url": "https://chengyuan-zhang.github.io/traffic-sim/preview.png",
+      "contentUrl": "https://chengyuan-zhang.github.io/traffic-sim/preview.png",
+      "width": 1200,
+      "height": 630,
+      "encodingFormat": "image/png",
+      "caption": "The traffic-sim ring road: vehicles coloured by speed, live flow and density charts, and a time-space diagram in which stop-and-go waves appear as backward-travelling diagonal bands."
+    },
+    {
+      "@type": "ScholarlyArticle",
+      "@id": "https://chengyuan-zhang.github.io/traffic-sim/#paper-ma-idm",
+      "name": "Bayesian Calibration of the Intelligent Driver Model",
+      "headline": "Bayesian Calibration of the Intelligent Driver Model",
+      "abstract": "Introduces MA-IDM, a memory-augmented Intelligent Driver Model in which the acceleration residual is modelled as a Gaussian process with a stationary kernel rather than as independent Gaussian error.",
+      "author": [
+        {
+          "@id": "https://chengyuan-zhang.github.io/traffic-sim/#author"
+        },
+        {
+          "@type": "Person",
+          "name": "Lijun Sun"
+        }
+      ],
+      "datePublished": "2024",
+      "pagination": "9308-9320",
+      "isPartOf": {
+        "@type": "PublicationIssue",
+        "issueNumber": "8",
+        "isPartOf": {
+          "@type": [
+            "PublicationVolume",
+            "Periodical"
+          ],
+          "volumeNumber": "25",
+          "name": "IEEE Transactions on Intelligent Transportation Systems"
+        }
+      },
+      "identifier": [
+        {
+          "@type": "PropertyValue",
+          "propertyID": "DOI",
+          "value": "10.1109/TITS.2024.3354102"
+        },
+        {
+          "@type": "PropertyValue",
+          "propertyID": "arXiv",
+          "value": "arXiv:2210.03571"
+        }
+      ],
+      "url": "https://doi.org/10.1109/TITS.2024.3354102",
+      "sameAs": [
+        "https://doi.org/10.1109/TITS.2024.3354102",
+        "https://arxiv.org/abs/2210.03571"
+      ]
+    },
+    {
+      "@type": "ScholarlyArticle",
+      "@id": "https://chengyuan-zhang.github.io/traffic-sim/#paper-dr-idm",
+      "name": "Calibrating Car-Following Models via Bayesian Dynamic Regression",
+      "headline": "Calibrating Car-Following Models via Bayesian Dynamic Regression",
+      "abstract": "Calibrates car-following models with an autoregressive AR(p) residual estimated jointly with the model parameters, letting the residual autocorrelation change sign over a memory horizon of roughly ten seconds.",
+      "author": [
+        {
+          "@id": "https://chengyuan-zhang.github.io/traffic-sim/#author"
+        },
+        {
+          "@type": "Person",
+          "name": "Wenshuo Wang"
+        },
+        {
+          "@type": "Person",
+          "name": "Lijun Sun"
+        }
+      ],
+      "datePublished": "2024",
+      "pagination": "104719",
+      "isPartOf": {
+        "@type": [
+          "PublicationVolume",
+          "Periodical"
+        ],
+        "volumeNumber": "168",
+        "name": "Transportation Research Part C: Emerging Technologies"
+      },
+      "identifier": [
+        {
+          "@type": "PropertyValue",
+          "propertyID": "DOI",
+          "value": "10.1016/j.trc.2024.104719"
+        },
+        {
+          "@type": "PropertyValue",
+          "propertyID": "arXiv",
+          "value": "arXiv:2307.03340"
+        }
+      ],
+      "url": "https://doi.org/10.1016/j.trc.2024.104719",
+      "sameAs": [
+        "https://doi.org/10.1016/j.trc.2024.104719",
+        "https://arxiv.org/abs/2307.03340"
+      ]
+    },
+    {
+      "@type": "ScholarlyArticle",
+      "@id": "https://chengyuan-zhang.github.io/traffic-sim/#paper-idm",
+      "name": "Congested traffic states in empirical observations and microscopic simulations",
+      "author": [
+        {
+          "@type": "Person",
+          "name": "Martin Treiber",
+          "sameAs": "https://mtreiber.de/"
+        },
+        {
+          "@type": "Person",
+          "name": "Ansgar Hennecke"
+        },
+        {
+          "@type": "Person",
+          "name": "Dirk Helbing"
+        }
+      ],
+      "datePublished": "2000",
+      "pagination": "1805-1824",
+      "isPartOf": {
+        "@type": "PublicationIssue",
+        "issueNumber": "2",
+        "isPartOf": {
+          "@type": [
+            "PublicationVolume",
+            "Periodical"
+          ],
+          "volumeNumber": "62",
+          "name": "Physical Review E"
+        }
+      },
+      "identifier": [
+        {
+          "@type": "PropertyValue",
+          "propertyID": "DOI",
+          "value": "10.1103/PhysRevE.62.1805"
+        }
+      ],
+      "url": "https://doi.org/10.1103/PhysRevE.62.1805",
+      "description": "The paper that introduced the Intelligent Driver Model."
+    },
+    {
+      "@type": "ScholarlyArticle",
+      "@id": "https://chengyuan-zhang.github.io/traffic-sim/#paper-sugiyama",
+      "name": "Traffic jams without bottlenecks: experimental evidence for the physical mechanism of the formation of a jam",
+      "author": [
+        {
+          "@type": "Person",
+          "name": "Yuki Sugiyama"
+        },
+        {
+          "@type": "Person",
+          "name": "Minoru Fukui"
+        },
+        {
+          "@type": "Person",
+          "name": "Macoto Kikuchi"
+        },
+        {
+          "@type": "Person",
+          "name": "Katsuya Hasebe"
+        },
+        {
+          "@type": "Person",
+          "name": "Akihiro Nakayama"
+        },
+        {
+          "@type": "Person",
+          "name": "Katsuhiro Nishinari"
+        },
+        {
+          "@type": "Person",
+          "name": "Shin-ichi Tadaki"
+        },
+        {
+          "@type": "Person",
+          "name": "Satoshi Yukawa"
+        }
+      ],
+      "datePublished": "2008",
+      "pagination": "033001",
+      "isPartOf": {
+        "@type": "PublicationIssue",
+        "issueNumber": "3",
+        "isPartOf": {
+          "@type": [
+            "PublicationVolume",
+            "Periodical"
+          ],
+          "volumeNumber": "10",
+          "name": "New Journal of Physics"
+        }
+      },
+      "identifier": [
+        {
+          "@type": "PropertyValue",
+          "propertyID": "DOI",
+          "value": "10.1088/1367-2630/10/3/033001"
+        }
+      ],
+      "url": "https://doi.org/10.1088/1367-2630/10/3/033001",
+      "description": "The circular-track experiment whose geometry the simulator presets follow."
+    },
+    {
+      "@type": [
+        "SoftwareApplication",
+        "WebApplication"
+      ],
+      "@id": "https://chengyuan-zhang.github.io/traffic-sim/#app",
+      "name": "traffic-sim — Ring-Road Traffic Simulator",
+      "alternateName": "traffic-sim",
+      "url": "https://chengyuan-zhang.github.io/traffic-sim/",
+      "applicationCategory": "EducationalApplication",
+      "applicationSubCategory": "Traffic simulation",
+      "operatingSystem": "Any (runs in a web browser)",
+      "browserRequirements": "Requires JavaScript and HTML5 canvas",
+      "softwareRequirements": "A modern web browser. No installation, build step or server.",
+      "description": "Simulates the Intelligent Driver Model for up to 80 vehicles on a one-lane circular road and adds a stochastic acceleration residual drawn from a Gaussian process (MA-IDM), an AR(p) process (dynamic-regression IDM) or white noise (B-IDM), so that the effect of correlated driver noise on stop-and-go wave formation can be watched directly.",
+      "featureList": [
+        "Intelligent Driver Model integrated in real time on a ring road",
+        "Three interchangeable stochastic driver-noise models: Gaussian process, AR(p) and white noise",
+        "Four Gaussian-process kernels: RBF, Matern-5/2, Matern-3/2 and Matern-1/2",
+        "AR(p) coefficients for p = 1 to 7 taken from published posterior means",
+        "Ring-road presets reproducing the geometry of two published calibration studies",
+        "Live average speed, density, flow and fundamental diagram over a user-placed measuring arc",
+        "Time-space diagram showing stop-and-go waves as backward-travelling bands",
+        "Shareable URLs that encode every control, with an optional seed for reproducible runs",
+        "Side-by-side comparison of all three noise models on lockstep rings"
+      ],
+      "codeRepository": "https://github.com/Chengyuan-Zhang/traffic-sim",
+      "programmingLanguage": "JavaScript",
+      "license": "https://opensource.org/licenses/MIT",
+      "isAccessibleForFree": true,
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "USD"
+      },
+      "author": {
+        "@id": "https://chengyuan-zhang.github.io/traffic-sim/#author"
+      },
+      "creator": {
+        "@id": "https://chengyuan-zhang.github.io/traffic-sim/#author"
+      },
+      "maintainer": {
+        "@id": "https://chengyuan-zhang.github.io/traffic-sim/#author"
+      },
+      "screenshot": {
+        "@id": "https://chengyuan-zhang.github.io/traffic-sim/#preview"
+      },
+      "softwareHelp": {
+        "@type": "CreativeWork",
+        "url": "https://chengyuan-zhang.github.io/traffic-sim/models.html"
+      },
+      "citation": [
+        {
+          "@id": "https://chengyuan-zhang.github.io/traffic-sim/#paper-ma-idm"
+        },
+        {
+          "@id": "https://chengyuan-zhang.github.io/traffic-sim/#paper-dr-idm"
+        },
+        {
+          "@id": "https://chengyuan-zhang.github.io/traffic-sim/#paper-idm"
+        }
+      ],
+      "keywords": "traffic simulation, intelligent driver model, IDM, car-following model, stochastic car-following, ring road, stop-and-go waves, phantom traffic jam, Gaussian process, autoregressive model, Bayesian calibration, fundamental diagram",
+      "inLanguage": "en",
+      "dateModified": "2026-09-18"
+    },
+    {
+      "@type": "WebPage",
+      "@id": "https://chengyuan-zhang.github.io/traffic-sim/#webpage",
+      "url": "https://chengyuan-zhang.github.io/traffic-sim/",
+      "name": "Ring-Road Traffic Simulator — Stochastic IDM Car-Following",
+      "description": "An interactive ring-road simulation of the Intelligent Driver Model with Gaussian-process, AR(p) or white driver noise, showing how stop-and-go waves form without any bottleneck.",
+      "isPartOf": {
+        "@id": "https://chengyuan-zhang.github.io/traffic-sim/#website"
+      },
+      "about": [
+        {
+          "@type": "DefinedTerm",
+          "name": "Intelligent Driver Model",
+          "sameAs": "https://en.wikipedia.org/wiki/Intelligent_driver_model"
+        },
+        {
+          "@type": "DefinedTerm",
+          "name": "Car-following model",
+          "sameAs": "https://en.wikipedia.org/wiki/Microscopic_traffic_flow_model"
+        },
+        {
+          "@type": "DefinedTerm",
+          "name": "Traffic flow",
+          "sameAs": "https://en.wikipedia.org/wiki/Traffic_flow"
+        },
+        {
+          "@type": "DefinedTerm",
+          "name": "Traffic wave",
+          "sameAs": "https://en.wikipedia.org/wiki/Traffic_wave"
+        },
+        {
+          "@type": "DefinedTerm",
+          "name": "Gaussian process",
+          "sameAs": "https://en.wikipedia.org/wiki/Gaussian_process"
+        },
+        {
+          "@type": "DefinedTerm",
+          "name": "Autoregressive model",
+          "sameAs": "https://en.wikipedia.org/wiki/Autoregressive_model"
+        },
+        {
+          "@type": "DefinedTerm",
+          "name": "Fundamental diagram of traffic flow",
+          "sameAs": "https://en.wikipedia.org/wiki/Fundamental_diagram_of_traffic_flow"
+        }
+      ],
+      "mainEntity": {
+        "@id": "https://chengyuan-zhang.github.io/traffic-sim/#app"
+      },
+      "primaryImageOfPage": {
+        "@id": "https://chengyuan-zhang.github.io/traffic-sim/#preview"
+      },
+      "author": {
+        "@id": "https://chengyuan-zhang.github.io/traffic-sim/#author"
+      },
+      "inLanguage": "en",
+      "datePublished": "2026-04-22",
+      "dateModified": "2026-09-18",
+      "citation": [
+        {
+          "@id": "https://chengyuan-zhang.github.io/traffic-sim/#paper-ma-idm"
+        },
+        {
+          "@id": "https://chengyuan-zhang.github.io/traffic-sim/#paper-dr-idm"
+        },
+        {
+          "@id": "https://chengyuan-zhang.github.io/traffic-sim/#paper-idm"
+        },
+        {
+          "@id": "https://chengyuan-zhang.github.io/traffic-sim/#paper-sugiyama"
+        }
+      ],
+      "breadcrumb": {
+        "@id": "https://chengyuan-zhang.github.io/traffic-sim/#breadcrumb"
+      },
+      "significantLink": [
+        "https://chengyuan-zhang.github.io/traffic-sim/models.html",
+        "https://chengyuan-zhang.github.io/traffic-sim/compare.html"
+      ]
+    },
+    {
+      "@type": "BreadcrumbList",
+      "@id": "https://chengyuan-zhang.github.io/traffic-sim/#breadcrumb",
+      "itemListElement": [
+        {
+          "@type": "ListItem",
+          "position": 1,
+          "name": "traffic-sim",
+          "item": "https://chengyuan-zhang.github.io/traffic-sim/"
+        },
+        {
+          "@type": "ListItem",
+          "position": 2,
+          "name": "Simulator",
+          "item": "https://chengyuan-zhang.github.io/traffic-sim/"
+        }
+      ]
+    },
+    {
+      "@type": "FAQPage",
+      "@id": "https://chengyuan-zhang.github.io/traffic-sim/#faq",
+      "url": "https://chengyuan-zhang.github.io/traffic-sim/#faq",
+      "inLanguage": "en",
+      "isPartOf": {
+        "@id": "https://chengyuan-zhang.github.io/traffic-sim/#website"
+      },
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "name": "What is traffic-sim?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "traffic-sim is a free, open-source simulator that runs the Intelligent Driver Model on a one-lane circular road entirely in your browser. You set the traffic density, the IDM parameters and the driver-noise model, then watch whether the ring settles into uniform flow or breaks into stop-and-go waves. There is nothing to install, and no data leaves your machine."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Why do traffic jams form on a ring road with no bottleneck?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Because dense car-following is unstable. Each driver reacts to the car ahead with a delay and with imperfect precision, so a small speed fluctuation is amplified rather than damped as it travels back through the queue. Past a critical density the amplification wins and the disturbance grows into a stopped cluster that moves backwards against the traffic — a phantom jam. Sugiyama and colleagues demonstrated exactly this with real drivers on a real circular track in 2008. Press Perturb to seed one here."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "What is the Intelligent Driver Model (IDM)?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "The IDM is a microscopic car-following model published by Treiber, Hennecke and Helbing in 2000. It gives every vehicle a continuous acceleration derived from only its own speed, the gap to the vehicle ahead and the rate of approach, using five interpretable parameters: desired speed v₀, safe time headway T, minimum gap s₀, maximum acceleration a and comfortable braking b. It is collision-free by construction and is the standard deterministic baseline in traffic-flow research. The models page gives the equations."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "What is driver noise, and why does its colour matter?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Driver noise is the acceleration residual that is left over after a deterministic model has been fitted to a real trajectory — everything the equation does not explain. Measured on HighD data that residual has a standard deviation of roughly 0.2 m/s² and stays correlated for several seconds, so it is not white noise. The colour matters because a car-following chain behaves like a low-pass amplifier: white noise is mostly high-frequency jitter that averages out along the platoon, whereas correlated noise puts the same variance into the low frequencies the chain amplifies into jams."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "What is the difference between MA-IDM, DR-IDM and B-IDM?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "All three add a random residual to the same IDM acceleration and differ only in the process that generates it. B-IDM uses independent Gaussian noise with no memory. DR-IDM uses an AR(p) process, so the residual is a weighted sum of its own recent past plus a fresh innovation. MA-IDM uses a Gaussian process with a stationary kernel, so memory is governed smoothly by a lengthscale of about 1.4 s rather than by a fixed number of lags. The compare page runs all three side-by-side on identical rings."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Can I reproduce or share an exact run?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Yes. The Copy link button writes every control into the URL fragment, so the link reopens the simulator with the same scenario. Add seed=<integer> (non-zero) to that URL and the random-number stream is seeded as well, which makes the run reproducible bit for bit."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Does this reproduce the results in the papers?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "No, and it is not meant to. It is a research-inspired teaching demo. Every driver here shares one parameter vector, whereas both papers’ ring experiments draw heterogeneous per-driver parameters from a joint posterior that was never published. Integration is semi-implicit Euler rather than the papers’ ballistic update, the Gaussian process is approximated with 32 random Fourier features instead of conditional Gaussian sampling, and flow is computed as density × space-mean speed rather than from detector crossings. The README lists every deviation."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "What do I need to run it?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Any modern browser with JavaScript and HTML5 canvas. There is no build step, no framework and no dependency — the simulator is a handful of plain JavaScript files. You can also clone the repository and open index.html straight from disk, or serve the folder with python -m http.server."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "How should I cite it?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Cite the two underlying papers — the BibTeX is in the Citation card above, and CITATION.cff in the repository carries the same metadata in machine-readable form: Zhang & Sun (2024), Bayesian Calibration of the Intelligent Driver Model, IEEE T-ITS, doi:10.1109/TITS.2024.3354102; and Zhang, Wang & Sun (2024), Calibrating Car-Following Models via Bayesian Dynamic Regression, Transportation Research Part C, doi:10.1016/j.trc.2024.104719."
+          }
+        }
+      ]
+    },
+    {
+      "@type": "HowTo",
+      "@id": "https://chengyuan-zhang.github.io/traffic-sim/#howto-reproduce",
+      "name": "Reproduce a published ring-road scenario in traffic-sim",
+      "description": "Load one of the two calibration papers’ ring-road setups and make the run reproducible.",
+      "inLanguage": "en",
+      "tool": {
+        "@id": "https://chengyuan-zhang.github.io/traffic-sim/#app"
+      },
+      "step": [
+        {
+          "@type": "HowToStep",
+          "position": 1,
+          "name": "Load the preset",
+          "text": "Open the Scenario panel and choose a preset — for example \"MA-IDM ring — calibrated θ (Fig. 10b)\". The ring geometry, vehicle count, initial speed and time step jump to the values both papers state: a 128 m radius, 37 vehicles, 11.6 m/s and Δt = 0.2 s.",
+          "url": "https://chengyuan-zhang.github.io/traffic-sim/#howto"
+        },
+        {
+          "@type": "HowToStep",
+          "position": 2,
+          "name": "Leave the IDM sliders alone",
+          "text": "The preset has already loaded that paper’s calibrated parameter vector θ. Moving any IDM slider drops the scenario back to Custom, so change them only when you mean to depart from the paper.",
+          "url": "https://chengyuan-zhang.github.io/traffic-sim/#howto"
+        },
+        {
+          "@type": "HowToStep",
+          "position": 3,
+          "name": "Pin the random stream",
+          "text": "Press Copy link, paste the URL into the address bar, append &seed=1 to the fragment and reload. The noise is now drawn from a seeded generator and the run is reproducible bit for bit.",
+          "url": "https://chengyuan-zhang.github.io/traffic-sim/#howto"
+        },
+        {
+          "@type": "HowToStep",
+          "position": 4,
+          "name": "Watch the time–space diagram",
+          "text": "Raise Sim speed to 5–10× and let the ring evolve. Diagonal bands running backwards across the time–space diagram are stop-and-go waves; the fundamental diagram loops as each wave crosses the measuring arc.",
+          "url": "https://chengyuan-zhang.github.io/traffic-sim/#howto"
+        }
+      ]
+    }
+  ]
+}
+</script>
 </head>
 <body>
   <a class="skip-link" href="#main-content">Skip to main content</a>
@@ -232,7 +822,9 @@
     </aside>
   </main>
 
-  <section class="charts">
+  <section class="charts" aria-labelledby="charts-title">
+    <h2 class="section-title" id="charts-title">Live traffic diagnostics
+      <span class="unit">speed, flow, density and the fundamental diagram</span></h2>
     <div class="chart-card">
       <h3>Average speed <span class="unit">(m/s)</span></h3>
       <canvas id="chartSpeed" width="600" height="160" role="img"
@@ -268,6 +860,61 @@
       </div>
       <canvas id="chartST" width="900" height="220" role="img"
               aria-label="Time–space diagram: horizontal axis is time (older on the left, newest on the right), vertical axis is position around the ring; pixel colour encodes local speed via the jet colormap. Stop-and-go waves appear as diagonal red bands."></canvas>
+    </div>
+  </section>
+
+  <!-- Answer-engine section: the questions people actually ask about ring-road
+       traffic instability, answered in full on the page (never only in the
+       JSON-LD) and kept in sync with the FAQPage node in <head>. -->
+  <section class="faq" id="faq" aria-labelledby="faq-title">
+    <h2 id="faq-title">Frequently asked questions</h2>
+    <div class="faq-list">
+      <article class="faq-item">
+        <h3>What is traffic-sim?</h3>
+        <p>traffic-sim is a free, open-source simulator that runs the Intelligent Driver Model on a one-lane circular road entirely in your browser. You set the traffic density, the IDM parameters and the driver-noise model, then watch whether the ring settles into uniform flow or breaks into stop-and-go waves. There is nothing to install, and no data leaves your machine.</p>
+      </article>
+      <article class="faq-item">
+        <h3>Why do traffic jams form on a ring road with no bottleneck?</h3>
+        <p>Because dense car-following is unstable. Each driver reacts to the car ahead with a delay and with imperfect precision, so a small speed fluctuation is amplified rather than damped as it travels back through the queue. Past a critical density the amplification wins and the disturbance grows into a stopped cluster that moves backwards against the traffic — a phantom jam. <a href="https://doi.org/10.1088/1367-2630/10/3/033001" target="_blank" rel="noopener noreferrer">Sugiyama and colleagues</a> demonstrated exactly this with real drivers on a real circular track in 2008. Press <strong>Perturb</strong> to seed one here.</p>
+      </article>
+      <article class="faq-item">
+        <h3>What is the Intelligent Driver Model (IDM)?</h3>
+        <p>The IDM is a microscopic car-following model published by <a href="https://doi.org/10.1103/PhysRevE.62.1805" target="_blank" rel="noopener noreferrer">Treiber, Hennecke and Helbing in 2000</a>. It gives every vehicle a continuous acceleration derived from only its own speed, the gap to the vehicle ahead and the rate of approach, using five interpretable parameters: desired speed v₀, safe time headway T, minimum gap s₀, maximum acceleration a and comfortable braking b. It is collision-free by construction and is the standard deterministic baseline in traffic-flow research. The <a href="models.html#idm">models page</a> gives the equations.</p>
+      </article>
+      <article class="faq-item">
+        <h3>What is driver noise, and why does its colour matter?</h3>
+        <p>Driver noise is the acceleration residual that is left over after a deterministic model has been fitted to a real trajectory — everything the equation does not explain. Measured on HighD data that residual has a standard deviation of roughly 0.2 m/s² and stays correlated for several seconds, so it is not white noise. The colour matters because a car-following chain behaves like a low-pass amplifier: white noise is mostly high-frequency jitter that averages out along the platoon, whereas correlated noise puts the same variance into the low frequencies the chain amplifies into jams.</p>
+      </article>
+      <article class="faq-item">
+        <h3>What is the difference between MA-IDM, DR-IDM and B-IDM?</h3>
+        <p>All three add a random residual to the same IDM acceleration and differ only in the process that generates it. <strong>B-IDM</strong> uses independent Gaussian noise with no memory. <strong>DR-IDM</strong> uses an AR(p) process, so the residual is a weighted sum of its own recent past plus a fresh innovation. <strong>MA-IDM</strong> uses a Gaussian process with a stationary kernel, so memory is governed smoothly by a lengthscale of about 1.4 s rather than by a fixed number of lags. The <a href="compare.html">compare page</a> runs all three side-by-side on identical rings.</p>
+      </article>
+      <article class="faq-item">
+        <h3>Can I reproduce or share an exact run?</h3>
+        <p>Yes. The <strong>Copy link</strong> button writes every control into the URL fragment, so the link reopens the simulator with the same scenario. Add <code>seed=&lt;integer&gt;</code> (non-zero) to that URL and the random-number stream is seeded as well, which makes the run reproducible bit for bit.</p>
+      </article>
+      <article class="faq-item">
+        <h3>Does this reproduce the results in the papers?</h3>
+        <p>No, and it is not meant to. It is a research-<em>inspired</em> teaching demo. Every driver here shares one parameter vector, whereas both papers&rsquo; ring experiments draw heterogeneous per-driver parameters from a joint posterior that was never published. Integration is semi-implicit Euler rather than the papers&rsquo; ballistic update, the Gaussian process is approximated with 32 random Fourier features instead of conditional Gaussian sampling, and flow is computed as density &times; space-mean speed rather than from detector crossings. The <a href="https://github.com/Chengyuan-Zhang/traffic-sim#known-limitations" target="_blank" rel="noopener noreferrer">README</a> lists every deviation.</p>
+      </article>
+      <article class="faq-item">
+        <h3>What do I need to run it?</h3>
+        <p>Any modern browser with JavaScript and HTML5 canvas. There is no build step, no framework and no dependency — the simulator is a handful of plain JavaScript files. You can also clone <a href="https://github.com/Chengyuan-Zhang/traffic-sim" target="_blank" rel="noopener noreferrer">the repository</a> and open <code>index.html</code> straight from disk, or serve the folder with <code>python -m http.server</code>.</p>
+      </article>
+      <article class="faq-item">
+        <h3>How should I cite it?</h3>
+        <p>Cite the two underlying papers — the BibTeX is in the <a href="#citation">Citation</a> card above, and <a href="https://github.com/Chengyuan-Zhang/traffic-sim/blob/main/CITATION.cff" target="_blank" rel="noopener noreferrer">CITATION.cff</a> in the repository carries the same metadata in machine-readable form: Zhang &amp; Sun (2024), <em>Bayesian Calibration of the Intelligent Driver Model</em>, IEEE T-ITS, doi:10.1109/TITS.2024.3354102; and Zhang, Wang &amp; Sun (2024), <em>Calibrating Car-Following Models via Bayesian Dynamic Regression</em>, Transportation Research Part C, doi:10.1016/j.trc.2024.104719.</p>
+      </article>
+    </div>
+
+    <div class="howto" id="howto">
+      <h3>Reproduce a published ring-road scenario in traffic-sim</h3>
+      <ol>
+        <li><strong>Load the preset.</strong> Open the Scenario panel and choose a preset — for example "MA-IDM ring — calibrated θ (Fig. 10b)". The ring geometry, vehicle count, initial speed and time step jump to the values both papers state: a 128 m radius, 37 vehicles, 11.6 m/s and Δt = 0.2 s.</li>
+        <li><strong>Leave the IDM sliders alone.</strong> The preset has already loaded that paper’s calibrated parameter vector θ. Moving any IDM slider drops the scenario back to Custom, so change them only when you mean to depart from the paper.</li>
+        <li><strong>Pin the random stream.</strong> Press Copy link, paste the URL into the address bar, append &amp;seed=1 to the fragment and reload. The noise is now drawn from a seeded generator and the run is reproducible bit for bit.</li>
+        <li><strong>Watch the time–space diagram.</strong> Raise Sim speed to 5–10× and let the ring evolve. Diagonal bands running backwards across the time–space diagram are stop-and-go waves; the fundamental diagram loops as each wave crosses the measuring arc.</li>
+      </ol>
     </div>
   </section>
 
@@ -309,7 +956,7 @@
       </div>
     </div>
 
-    <div class="about-card">
+    <div class="about-card" id="citation">
       <h2>Citation</h2>
       <p>If this simulator is useful in your work, please cite the underlying papers:</p>
       <ol class="refs">
@@ -351,7 +998,8 @@
   </section>
 
   <footer>
-    <p>Source on <a href="https://github.com/Chengyuan-Zhang/traffic-sim" target="_blank" rel="noopener noreferrer">GitHub</a>.</p>
+    <p>Source on <a href="https://github.com/Chengyuan-Zhang/traffic-sim" target="_blank" rel="noopener noreferrer">GitHub</a>
+       · MIT licence · updated <time datetime="2026-09-18">18 September 2026</time></p>
     <p class="tribute-small">
       With gratitude to <strong>Dr. <a href="https://mtreiber.de/" target="_blank" rel="noopener noreferrer">Martin Treiber</a></strong> —
       inventor of the IDM and pioneer of stochastic car-following — whose research, and whose
